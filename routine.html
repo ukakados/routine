@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ルーティン">
+<meta name="theme-color" content="#0f0f0f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>ルーティン管理</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Hiragino Sans',sans-serif;background:#0f0f0f;color:#e8e8e8;max-width:420px;margin:0 auto;padding:12px}
+.nav{display:flex;gap:3px;padding:3px;background:#1a1a1a;border-radius:999px;margin-bottom:14px;border:.5px solid #2a2a2a}
+.nb{flex:1;padding:7px 0;border:none;background:transparent;border-radius:999px;font-size:12px;font-weight:500;color:#666;cursor:pointer}
+.nb.on{background:#252525;color:#e8e8e8}
+.scr{display:none}.scr.on{display:block}
+/* pattern screen */
+.btabs{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+.bt{padding:5px 12px;border-radius:999px;border:.5px solid #333;font-size:12px;cursor:pointer;background:transparent;color:#888}
+.bt.on{font-weight:500}
+.bt[data-b="朝"].on{border-color:#EF9F27;background:#2a1f08;color:#EF9F27}
+.bt[data-b="昼"].on{border-color:#1D9E75;background:#081f18;color:#1D9E75}
+.bt[data-b="夜"].on{border-color:#8B7FD4;background:#12103a;color:#8B7FD4}
+.bt[data-b="その他"].on{border-color:#D4537E;background:#2a0f18;color:#D4537E}
+.pgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:8px}
+.pc{background:#1a1a1a;border:.5px solid #2a2a2a;border-radius:12px;padding:10px;cursor:pointer;position:relative}
+.pc:hover{border-color:#444}
+.pc-name{font-size:13px;font-weight:500;color:#e8e8e8;margin-bottom:2px;padding-right:40px}
+.pc-meta{font-size:11px;color:#666;margin-bottom:5px}
+.pc-row{font-size:11px;color:#666;display:flex;justify-content:space-between;margin-bottom:1px}
+.pc-actions{position:absolute;top:6px;right:6px;display:flex;gap:2px}
+.pc-btn{background:transparent;border:none;cursor:pointer;color:#555;font-size:12px;padding:2px 5px;border-radius:4px}
+.pc-btn:hover{background:#252525;color:#888}
+.add-pc{border:.5px dashed #333;border-radius:12px;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:#555;min-height:70px}
+.add-pc:hover{background:#1a1a1a;color:#888}
+/* today screen */
+.date-nav{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.dnav-btn{padding:5px 10px;border:.5px solid #333;border-radius:8px;background:transparent;cursor:pointer;font-size:14px;color:#888;flex-shrink:0}
+.dnav-btn:hover{background:#1a1a1a}
+.dnav-center{flex:1;text-align:center}
+.dnav-date{font-size:14px;font-weight:500;color:#e8e8e8}
+.dnav-sub{font-size:11px;color:#555;margin-top:1px}
+.today-badge{display:inline-block;background:#0d2a1f;color:#1D9E75;font-size:10px;font-weight:500;padding:1px 7px;border-radius:999px;margin-left:5px;vertical-align:middle}
+.prog-bg{height:5px;background:#1a1a1a;border-radius:999px;overflow:hidden;margin:4px 0 2px;border:.5px solid #2a2a2a}
+.prog-fill{height:100%;background:#1D9E75;border-radius:999px;transition:width .3s}
+.psub{font-size:11px;color:#555;text-align:right;margin-bottom:12px}
+/* band section */
+.t-band{margin-bottom:8px;border:.5px solid #2a2a2a;border-radius:12px;overflow:hidden;transition:opacity .15s}
+.t-band.sec-dragging{opacity:.35}
+.t-band.sec-drag-over{border-color:#1D9E75;border-top:2px solid #1D9E75}
+.band-toggle{display:flex;align-items:center;gap:6px;padding:10px 12px;background:#1a1a1a;user-select:none}
+.sec-grip{color:#444;font-size:16px;cursor:grab;flex-shrink:0;padding:2px 4px}
+.sec-grip:hover{color:#666}
+.band-inner{display:flex;align-items:center;gap:6px;flex:1;cursor:pointer}
+.bdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.bdot.朝{background:#EF9F27}.bdot.昼{background:#1D9E75}.bdot.夜{background:#8B7FD4}.bdot.その他{background:#D4537E}
+.btitle{font-size:14px;font-weight:500;color:#e8e8e8}
+.bpat{font-size:11px;color:#666;margin-left:2px}
+.bmins{font-size:11px;color:#555}
+.bpct{font-size:11px;font-weight:500;color:#1D9E75}
+.bchevron{font-size:14px;color:#555;transition:transform .2s;margin-left:auto;flex-shrink:0}
+.bchevron.open{transform:rotate(180deg)}
+.band-body{padding:10px 12px;display:none}
+.band-body.open{display:block}
+.add-other{margin-bottom:8px;border:.5px dashed #2a2a2a;border-radius:12px;padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:7px;font-size:12px;color:#555;background:transparent;width:100%}
+.add-other:hover{background:#1a1a1a;color:#888}
+/* pattern selector */
+.sel-label{font-size:11px;color:#555;margin-bottom:6px}
+.ps-row{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+.psb{padding:5px 12px;border-radius:999px;border:.5px solid #333;font-size:12px;cursor:pointer;background:transparent;color:#888}
+.psb:hover{background:#1a1a1a}
+.chosen-bar{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.chg-btn{padding:3px 10px;border-radius:999px;border:.5px solid #333;font-size:11px;cursor:pointer;background:transparent;color:#888}
+.chg-btn:hover{background:#1a1a1a}
+/* checklist */
+.cl{display:flex;flex-direction:column;gap:3px}
+.ci{display:flex;align-items:center;gap:7px;padding:7px 9px;background:#111;border:.5px solid #222;border-radius:8px;cursor:grab;user-select:none}
+.ci.dragging{opacity:.35;border-style:dashed}
+.ci.drag-over{border-top:2px solid #1D9E75}
+.ci.done{opacity:.35}
+.ci.done .ci-lbl{text-decoration:line-through}
+.dh{color:#444;font-size:14px;cursor:grab;flex-shrink:0}
+.ck{width:18px;height:18px;border-radius:50%;border:1.5px solid #333;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:.12s;font-size:11px}
+.ck.on{background:#1D9E75;border-color:#1D9E75;color:#fff}
+.ci-lbl{font-size:13px;color:#e8e8e8;flex:1}
+.ci-min{font-size:11px;color:#555;white-space:nowrap}
+.ci-del{background:transparent;border:none;cursor:pointer;color:#444;font-size:12px;padding:2px 4px;border-radius:4px;flex-shrink:0;opacity:0}
+.ci:hover .ci-del{opacity:1}
+.ins-row{display:flex;align-items:center;justify-content:center;height:20px;opacity:0;transition:opacity .12s}
+.ins-row:hover{opacity:1}
+.ins-btn{padding:2px 9px;border-radius:999px;border:.5px dashed #333;background:#111;font-size:10px;color:#666;cursor:pointer}
+/* stats */
+.bs-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:14px}
+.bs-card{background:#1a1a1a;border-radius:8px;padding:10px 12px}
+.bs-card.full{grid-column:1/-1}
+.bs-label{font-size:11px;color:#666;margin-bottom:4px}
+.bs-val{font-size:20px;font-weight:600;color:#e8e8e8}
+.bs-bar-bg{height:4px;background:#222;border-radius:999px;margin-top:5px;overflow:hidden}
+.bs-bar{height:100%;border-radius:999px;transition:width .3s}
+.wbars{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.wd{display:flex;flex-direction:column;align-items:center;gap:2px}
+.wbg{width:26px;height:60px;background:#1a1a1a;border-radius:4px;display:flex;align-items:flex-end;overflow:hidden}
+.wb{width:100%;background:#1D9E75;border-radius:4px}
+.wl{font-size:10px;color:#555}
+.wp{font-size:10px;color:#666}
+/* modals */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:flex-start;justify-content:center;padding-top:40px;z-index:100}
+.ov.on{display:flex}
+.od{background:#1a1a1a;border-radius:14px;padding:16px;width:320px;max-width:95vw;border:.5px solid #333;max-height:80vh;overflow-y:auto}
+.od h3{font-size:14px;font-weight:500;color:#e8e8e8;margin-bottom:12px}
+.fl{margin-bottom:8px}
+.fl label{font-size:11px;color:#666;display:block;margin-bottom:3px}
+.fl input{width:100%;padding:7px 9px;border:.5px solid #333;border-radius:8px;font-size:13px;background:#111;color:#e8e8e8}
+.il{display:flex;flex-direction:column;gap:8px;margin-bottom:7px}
+/* 項目行：textarea使用・2行レイアウト */
+.ir{display:flex;flex-direction:column;gap:4px;background:#161616;border:.5px solid #2a2a2a;border-radius:10px;padding:7px 8px}
+.ir-top{display:flex;gap:5px;align-items:flex-start}
+.ir textarea{flex:1;padding:4px 6px;border:.5px solid #333;border-radius:6px;font-size:12px;background:#111;color:#e8e8e8;resize:none;min-height:38px;line-height:1.4;font-family:inherit}
+.ir-right{display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0}
+.ir input.mw{width:58px;padding:4px 6px;border:.5px solid #333;border-radius:6px;font-size:12px;background:#111;color:#e8e8e8;text-align:center}
+.ir-time{font-size:11px;color:#1D9E75;text-align:right;min-width:58px;padding:2px 6px}
+.ir-memo{width:100%;padding:4px 6px;border:.5px solid #222;border-radius:6px;font-size:11px;background:#0d0d0d;color:#888;resize:none;min-height:28px;line-height:1.4;font-family:inherit}
+.ir-memo::placeholder{color:#444}
+.rm{padding:3px 6px;border:.5px solid #2a2a2a;border-radius:6px;background:transparent;cursor:pointer;color:#555;font-size:11px;white-space:nowrap}
+.rm:hover{color:#D4537E}
+/* 開始時刻入力 */
+.start-time-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 8px;background:#161616;border-radius:8px;border:.5px solid #2a2a2a}
+.start-time-row label{font-size:11px;color:#666}
+.start-time-row input{padding:4px 8px;border:.5px solid #333;border-radius:6px;font-size:12px;background:#111;color:#e8e8e8;width:80px}
+.start-time-row span{font-size:11px;color:#555}
+.add-ir{padding:5px 9px;border:.5px dashed #333;border-radius:8px;background:transparent;font-size:11px;color:#666;cursor:pointer;width:100%}
+/* メモポップアップ */
+.memo-popup{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+.memo-popup.on{display:flex}
+.memo-card{background:#1e1e1e;border-radius:14px;padding:16px;width:300px;max-width:95vw;border:.5px solid #444;max-height:70vh;overflow-y:auto}
+.memo-card-title{font-size:13px;font-weight:500;color:#e8e8e8;margin-bottom:10px}
+.memo-card-body{font-size:13px;color:#bbb;line-height:1.6;white-space:pre-wrap}
+.memo-card-close{margin-top:12px;width:100%;padding:8px;border:none;background:#333;color:#e8e8e8;border-radius:8px;font-size:12px;cursor:pointer}
+/* 予定画面の時刻表示 */
+.ci-time{font-size:10px;color:#1D9E75;white-space:nowrap;margin-left:2px}
+.ci-has-memo{cursor:pointer}
+.ci-has-memo .ci-lbl{text-decoration-line:underline;text-decoration-style:dotted;text-decoration-color:#555}
+.of{display:flex;gap:6px;justify-content:flex-end;margin-top:10px;padding-top:10px;border-top:.5px solid #222}
+.bc{padding:6px 14px;border-radius:8px;border:.5px solid #333;background:transparent;font-size:12px;cursor:pointer;color:#888}
+.bp{padding:6px 14px;border-radius:8px;border:none;background:#1D9E75;color:#fff;font-size:12px;cursor:pointer;font-weight:500}
+.smi{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;border:.5px solid #222;margin-bottom:6px;background:#111}
+.smi:hover{border-color:#444;background:#1a1a1a}
+.smi-name{font-size:13px;font-weight:500;color:#e8e8e8}
+.smi-meta{font-size:11px;color:#666}
+.smi-ck{width:18px;height:18px;border-radius:50%;border:1.5px solid #333;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:auto;font-size:11px}
+.smi-ck.on{background:#1D9E75;border-color:#1D9E75;color:#fff}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <button class="nb on" onclick="go('pat')">📋 パターン</button>
+  <button class="nb" onclick="go('today')">📅 予定</button>
+  <button class="nb" onclick="go('stats')">📊 記録</button>
+</nav>
+<div class="scr on" id="scr-pat">
+  <div class="btabs" id="btabs"></div>
+  <div class="pgrid" id="pgrid"></div>
+</div>
+<div class="scr" id="scr-today">
+  <div class="date-nav">
+    <button class="dnav-btn" onclick="shift(-1)">‹</button>
+    <div class="dnav-center">
+      <div class="dnav-date" id="dn-date"></div>
+      <div class="dnav-sub" id="dn-sub"></div>
+    </div>
+    <button class="dnav-btn" onclick="shift(1)">›</button>
+  </div>
+  <div class="prog-bg"><div class="prog-fill" id="pfill" style="width:0%"></div></div>
+  <div class="psub" id="psub">0 / 0 完了</div>
+  <div id="tbands"></div>
+</div>
+<div class="scr" id="scr-stats">
+  <div style="font-size:13px;font-weight:500;color:#e8e8e8;margin-bottom:8px">達成率（今日）</div>
+  <div class="bs-grid" id="bs-grid"></div>
+  <div style="font-size:13px;font-weight:500;color:#e8e8e8;margin-bottom:8px">過去7日間</div>
+  <div class="wbars" id="wbars"></div>
+</div>
+
+<!-- パターン編集モーダル -->
+<div class="ov" id="ov-pat" onclick="closeOv('ov-pat')"><div class="od" onclick="event.stopPropagation()">
+  <h3 id="ov-pt">パターンを作成</h3>
+  <div class="fl"><label>パターン名</label><input id="op-n"/></div>
+  <div class="fl"><label>メモ（任意）</label><input id="op-m"/></div>
+  <div class="start-time-row">
+    <label>開始時刻</label>
+    <input type="time" id="op-start" oninput="refreshTimes()"/>
+    <span>→ 各項目の終了目安時刻を表示</span>
+  </div>
+  <div style="font-size:11px;color:#555;margin-bottom:5px">項目（項目名・分数・メモ）</div>
+  <div class="il" id="op-items"></div>
+  <button class="add-ir" onclick="addOI()">＋ 追加</button>
+  <div class="of"><button class="bc" onclick="closeOv('ov-pat')">キャンセル</button><button class="bp" onclick="savePat()">保存</button></div>
+</div></div>
+
+<!-- 項目挿入モーダル -->
+<div class="ov" id="ov-ins" onclick="closeOv('ov-ins')"><div class="od" onclick="event.stopPropagation()">
+  <h3>項目を挿入</h3>
+  <div class="fl"><label>項目名</label><textarea id="oi-l" placeholder="例：洗顔" rows="2" style="width:100%;padding:7px 9px;border:.5px solid #333;border-radius:8px;font-size:13px;background:#111;color:#e8e8e8;resize:none;font-family:inherit"></textarea></div>
+  <div class="fl"><label>所要時間（分）</label><input id="oi-m" type="number" min="0" placeholder="5"/></div>
+  <div class="fl"><label>メモ（任意）</label><textarea id="oi-memo" placeholder="筋トレメニューなど" rows="2" style="width:100%;padding:7px 9px;border:.5px solid #333;border-radius:8px;font-size:13px;background:#111;color:#e8e8e8;resize:none;font-family:inherit"></textarea></div>
+  <div class="of"><button class="bc" onclick="closeOv('ov-ins')">キャンセル</button><button class="bp" onclick="confirmIns()">追加</button></div>
+</div></div>
+
+<!-- メモポップアップ -->
+<div class="memo-popup" id="memo-popup" onclick="this.classList.remove('on')">
+  <div class="memo-card" onclick="event.stopPropagation()">
+    <div class="memo-card-title" id="memo-title"></div>
+    <div class="memo-card-body" id="memo-body"></div>
+    <button class="memo-card-close" onclick="document.getElementById('memo-popup').classList.remove('on')">閉じる</button>
+  </div>
+</div>
+
+<!-- パターン選択モーダル -->
+<div class="ov" id="ov-sel" onclick="closeOv('ov-sel')"><div class="od" onclick="event.stopPropagation()">
+  <h3 id="ov-st">パターンを選ぶ</h3>
+  <div id="ov-sl"></div>
+  <div class="of"><button class="bc" onclick="closeOv('ov-sel')">閉じる</button></div>
+</div></div>
+
+<script>
+// ─── 定数 ───────────────────────────────────────────────
+const FIXED = ['朝','昼','夜'];
+const ALL_BANDS = ['朝','昼','夜','その他'];
+const BAND_COLOR = {朝:'#EF9F27',昼:'#1D9E75',夜:'#8B7FD4',その他:'#D4537E'};
+const WDAYS = '日月火水木金土';
+
+// ─── パターンデータ ──────────────────────────────────────
+// 共通の朝ルーティン前半（多くのパターンで共有）
+const MORNING_BASE = [
+  {l:'起床',m:2},{l:'塩と白湯を摂取',m:2},{l:'目薬・洗顔・スキンケア・歯磨き',m:5},
+  {l:'サプリの準備',m:5},{l:'体重計に乗る',m:3},{l:'音楽をかける',m:2},
+  {l:'コーヒーを入れる',m:3},{l:'2つのスマホに「今日」のメモを作成',m:2},
+  {l:'手帳にゴールと睡眠・体重を記録',m:3},{l:'手帳にTODOを転記',m:10}
+];
+const MORNING_BODY = [
+  {l:'ストレッチ（ミニ）',m:10},{l:'コールドシャワー',m:5},{l:'フェイスヨガ（ミニ）',m:5},
+  {l:'瞑想',m:15},{l:'スキンケア・アファメーション',m:5},{l:'着替え',m:5}
+];
+const MORNING_FAMILY = [
+  {l:'朝のおつとめ',m:10},{l:'部屋の片付け・葵を起こす・出発準備サポート',m:15},
+  {l:'朝食（ヨーグルト）・弁当サポート',m:5},{l:'歯磨き・身だしなみ',m:5},{l:'神棚',m:2}
+];
+
+const PATTERNS = {
+  朝: [
+    { id:'朝MON', name:'月曜朝', memo:'外食控える・22時就寝',
+      items:[
+        {l:'起床',m:2},{l:'塩と白湯を摂取',m:2},{l:'目薬・洗顔・スキンケア・歯磨き',m:5},
+        {l:'サプリの準備',m:5},{l:'着替えて体重計に乗る',m:3},{l:'イヤホンをはめる',m:2},
+        {l:'2つのスマホに「今日」のメモを作成',m:3},{l:'手帳にゴールと睡眠・体重を記録',m:5},
+        {l:'手帳にTODOを転記',m:5},{l:'ジムへ・コーヒー買う',m:5},
+        {l:'ジム：ストレッチ',m:20},{l:'ジム：ウェイト',m:10},{l:'ジム：ランニング',m:5},
+        {l:'全力ダッシュ',m:10},{l:'コールドシャワー',m:10},{l:'フェイスヨガ',m:15},
+        {l:'瞑想',m:15},{l:'スキンケア・アファメーション',m:5},{l:'着替え',m:5},
+        {l:'朝の仕事（稟議・シャチハタ・マネーフォワードなど）',m:15},
+        {l:'部屋の片付け・葵を起こす・出発準備サポート',m:15},
+        {l:'朝食（ヨーグルト）・弁当サポート',m:5},{l:'歯磨き・身だしなみ',m:5},{l:'神棚',m:2},
+        {l:'イヤホンで日経など耳から情報収集しながら出社',m:13},{l:'子供たちに挨拶',m:2},
+        {l:'本願寺にお参り',m:5},{l:'コーヒーを買う',m:5},{l:'ジャーナリング',m:20},
+        {l:'歩いて会社へ（テンション上がる動画みながら）',m:5},
+        {l:'神棚・机のまわりセッティング',m:3},{l:'時間5分前に着席',m:5},
+        {l:'月朝MTG（TOM活併用）',m:85},{l:'メールチェック・チャットチェック',m:10},
+        {l:'朝礼ネタを考える',m:5},{l:'部次長会議ネタを考える',m:5},{l:'ブログネタを考える',m:5},
+        {l:'会議後トイレ・顔トレ',m:5},{l:'朝礼',m:30},{l:'会議準備',m:15},
+        {l:'手帳とにらめっこ',m:15},{l:'部次長会議（TIN活用）',m:60},
+        {l:'会議終了後：勉強時間（次の予定まで）',m:30}
+      ]
+    },
+    { id:'朝TUE', name:'火〜金朝', memo:'23時就寝',
+      items:[
+        ...MORNING_BASE, {l:'ストレッチ（ミニ）',m:10},{l:'ウェイト（ミニ）',m:10},
+        {l:'コールドシャワー',m:5},{l:'フェイスヨガ',m:10},{l:'瞑想',m:10},
+        {l:'スキンケア・アファメーション',m:5},{l:'着替え',m:5},
+        ...MORNING_FAMILY,
+        {l:'イヤホンで日経など耳から情報収集しながら出社',m:55},{l:'子供たちに挨拶',m:3},
+        {l:'ゴルフ練習',m:20},{l:'ストレッチ',m:20},{l:'ウェイト',m:20},
+        {l:'イヤホンで日経など耳から情報収集しながら出社（後半）',m:10},
+        {l:'本願寺にお参り',m:8},{l:'歩いて会社へ（テンション上がる動画みながら）',m:2},
+        {l:'神棚・机のまわりセッティング',m:5},{l:'ジャーナリング',m:20},
+        {l:'TOM活（稟議・シャチハタ・マネーフォワード含む）',m:30},
+        {l:'メールチェック・チャットチェック',m:10},{l:'TOM活後トイレ・顔トレ',m:5},
+        {l:'TOM活残務をマルチタスクで午前中に終わらせる',m:20},
+        {l:'手帳とにらめっこ',m:5},{l:'次の予定まで勉強時間',m:30}
+      ]
+    },
+    { id:'朝SAT', name:'土曜朝', memo:'23時就寝',
+      items:[
+        ...MORNING_BASE,...MORNING_BODY,...MORNING_FAMILY,
+        {l:'イヤホンはめてジムへ',m:55},{l:'子供たちに挨拶',m:3},
+        {l:'ゴルフ練習',m:15},{l:'ジム：ストレッチ（ミニ）',m:20},{l:'ジム：ウェイト（ミニ）',m:20},
+        {l:'着替え・LX手配確認',m:10},{l:'イヤホンはめて暁の送迎へ（日経など）',m:10},
+        {l:'テンション上がる動画みながらインドアへ',m:60},{l:'ゴルフ練習',m:60},
+        {l:'練習後のケア',m:30},{l:'暁のお迎え',m:30},
+        {l:'車でジャーナリング',m:15},{l:'車でTOM活（稟議・シャチハタ・マネーフォワード含む）',m:15},
+        {l:'メールチェック・チャットチェック',m:10},{l:'暁の応援',m:30}
+      ]
+    },
+    { id:'朝SATG', name:'土曜ゴルフデー', memo:'23時就寝・直行',
+      items:[
+        ...MORNING_BASE,...MORNING_BODY,
+        {l:'朝食（ヨーグルト）',m:5},{l:'歯磨き・身だしなみ',m:5},{l:'神棚',m:3},
+        {l:'イヤホンはめてゴルフへ',m:2},{l:'子供たちに挨拶',m:5},
+        {l:'LOOPでLXを取りに',m:20},{l:'日経など耳から情報収集しながらゴルフ場へ',m:30},
+        {l:'ゴルフ場到着・車でジャーナリング',m:15},
+        {l:'車でTOM活（稟議・シャチハタ・マネーフォワード含む）',m:15},
+        {l:'メールチェック・チャットチェック',m:10},
+        {l:'早めにチェックインしてアプローチ練習',m:30},{l:'練習（ラウンド）',m:240},{l:'練習後のケア',m:30}
+      ]
+    },
+    { id:'朝SUN', name:'日曜朝', memo:'23時就寝',
+      items:[
+        ...MORNING_BASE,{l:'ストレッチ（ミニ）・筋トレ（ミニ）',m:10},
+        {l:'コールドシャワー',m:5},{l:'フェイスヨガ（ミニ）',m:5},{l:'瞑想',m:15},
+        {l:'スキンケア・アファメーション',m:5},{l:'着替え',m:5},{l:'神棚',m:5},{l:'ゴルフ練習へ',m:95}
+      ]
+    },
+    { id:'朝BIZ', name:'出張先', memo:'23:30就寝・手帳と水はベッドサイドに',
+      items:[
+        {l:'起床',m:3},{l:'水を摂取',m:2},{l:'目薬・洗顔・歯磨き',m:7},{l:'サプリの準備',m:5},
+        {l:'音楽をかける',m:2},{l:'2つのスマホに「今日」のメモを作成',m:3},
+        {l:'手帳にゴールと睡眠・体重を記録',m:2},{l:'手帳にTODOを転記',m:3},
+        {l:'風呂の準備',m:3},{l:'風呂へ・体重計',m:5},{l:'身を清める',m:5},
+        {l:'サウナ（6〜8分×2・水風呂2分×2・最後はシャキッと）',m:35},
+        {l:'※サウナ無の場合：交代浴（温6分→水シャワー→休憩3分）×2・最後は水シャワー',m:0},
+        {l:'ボーッとして部屋へ',m:5},{l:'ストレッチ',m:15},{l:'筋トレ',m:15},
+        {l:'瞑想',m:10},{l:'フェイスヨガ',m:10},{l:'スキンケア・アファメーション',m:10},
+        {l:'着替えと片付け',m:5},{l:'イヤホンはめて散歩へ・途中でコーヒーを買う',m:30},
+        {l:'ジャーナリング・手帳とにらめっこ・勉強',m:30},{l:'部屋に戻る・仕事開始',m:10}
+      ]
+    }
+  ],
+  昼: [
+    { id:'昼A', name:'平日ランチA', memo:'ゴルフ練習あり',
+      items:[{l:'階段',m:10},{l:'散歩＆プロテイン',m:10},{l:'ゴルフ練習',m:45},{l:'散歩＆プロテイン',m:10},{l:'階段',m:5}]
+    },
+    { id:'昼B', name:'平日ランチB', memo:'デスクランチ＋昼寝',
+      items:[{l:'階段',m:5},{l:'散歩（軽食を買いに）',m:10},{l:'階段',m:5},{l:'軽食',m:15},{l:'昼寝',m:20}]
+    }
+  ],
+  夜: [
+    { id:'夜NA', name:'会食なし', memo:'理想22〜23時就寝',
+      items:[
+        {l:'帰宅',m:30},{l:'徒歩でジムへ',m:55},{l:'ゴルフ練習',m:60},{l:'ジムトレ',m:5},
+        {l:'帰宅',m:2},{l:'手洗い・うがい',m:25},{l:'夕食（理想20:30、遅くとも21:00まで）',m:15},
+        {l:'手帳とスマホを準備',m:15},{l:'風呂（冷水シャワー）',m:5},{l:'手帳タイム',m:5},
+        {l:'フェイスケア',m:5},{l:'スキンケア',m:5},{l:'歯磨き・顔パック',m:5},{l:'白湯',m:5},
+        {l:'スマホ充電・通知OFF',m:5},{l:'照明を最小に',m:30},
+        {l:'ストレッチ・子供と一緒に',m:15},{l:'マッサージ・子供と一緒に',m:30},
+        {l:'夜体操（リミット22:30）',m:5},{l:'布団に入る',m:5},
+        {l:'読書（紙・数ページ）',m:10},{l:'消灯・就寝',m:0}
+      ]
+    },
+    { id:'夜B', name:'接待・飲み会', memo:'',
+      items:[{l:'帰宅・シャワー',m:15},{l:'ストレッチ',m:5}]
+    }
+  ],
+  その他: [
+    { id:'他A', name:'飛行機移動', memo:'',
+      items:[{l:'機内ストレッチ',m:10},{l:'読書・勉強',m:30},{l:'水分補給',m:5}]
+    },
+    { id:'他B', name:'ゴルフ翌日リカバリー', memo:'',
+      items:[{l:'アイシング・ストレッチ',m:20},{l:'プロテイン補給',m:10},{l:'軽いウォーキング',m:20}]
+    },
+    { id:'他C', name:'移動時間', memo:'新幹線・飛行機など',
+      items:[
+        {l:'瞑想',m:10},{l:'セッティング',m:5},{l:'動画でモチベーションを上げて',m:5},
+        {l:'TOM活（30〜50分）',m:40},{l:'立ってストレッチ',m:5},{l:'余白の時間',m:5},
+        {l:'昼寝',m:15},{l:'勉強（15〜30分）',m:20},{l:'立ってストレッチ',m:5},
+        {l:'読書（15〜30分）',m:20},{l:'立ってストレッチ',m:5},{l:'自由時間（到着まで）',m:20}
+      ]
+    },
+    { id:'他D', name:'手帳とにらめっこ', memo:'木夜まで来週案・金調整・土日最終調整',
+      items:[
+        {l:'【木曜夜まで】来週の予定案を作成',m:0},{l:'【金曜】来週の予定を調整',m:0},
+        {l:'【土日】週末含む最終調整',m:0},{l:'空欄を埋める',m:10},
+        {l:'消し込みをしながらTODOを出す',m:10},{l:'スマホメモとの同期',m:5},
+        {l:'確定した予定の追記',m:5},{l:'時間が余ったら大きな空欄に思考を這わす',m:10},
+        {l:'空きスペースに絵の練習',m:10}
+      ]
+    }
+  ]
+};
+
+// ─── ストレージ ──────────────────────────────────────────
+function initState() {
+  return {
+    patterns: JSON.parse(JSON.stringify(PATTERNS)),
+    days: {},
+    history: Array.from({length:7}, (_,i) => {
+      const d = new Date(); d.setDate(d.getDate()-7+i);
+      return {date:d.toDateString(), pct:i===6?0:Math.round(35+Math.random()*60), bands:{朝:null,昼:null,夜:null,その他:null}};
+    }),
+    nid: 300
+  };
+}
+function emptyDay() {
+  return {plan:{朝:null,昼:null,夜:null}, otherSlots:[], sectionOrder:['朝','昼','夜'], checked:{}, edits:{}};
+}
+
+let S;
+try {
+  S = JSON.parse(localStorage.getItem('rv10'));
+  if (!S?.patterns) throw 0;
+  if (!S.days) S.days = {};
+  // パターンデータを最新に更新
+  ALL_BANDS.forEach(b => { if (!S.patterns[b]) S.patterns[b] = []; });
+  Object.entries(PATTERNS).forEach(([b, pats]) => {
+    pats.forEach(p => {
+      const i = S.patterns[b].findIndex(x => x.id === p.id);
+      if (i >= 0) S.patterns[b][i] = p; else S.patterns[b].push(p);
+    });
+  });
+  // day構造を移行
+  Object.values(S.days).forEach(d => {
+    if (!d.plan) d.plan = {朝:null,昼:null,夜:null};
+    if (!d.otherSlots) d.otherSlots = [];
+    if (Array.isArray(d.plan.その他)) { d.otherSlots = d.plan.その他; delete d.plan.その他; }
+    if (!d.edits) d.edits = {};
+    if (!d.sectionOrder) d.sectionOrder = ['朝','昼','夜', ...d.otherSlots.map((_,i) => 'other:'+i)];
+  });
+} catch(e) { S = initState(); }
+
+const save = () => { try { localStorage.setItem('rv10', JSON.stringify(S)); } catch(e) {} };
+save();
+
+// ─── ユーティリティ ──────────────────────────────────────
+const toDateStr = o => { const d = new Date(); d.setDate(d.getDate()+o); return d.toDateString(); };
+const toDate    = o => { const d = new Date(); d.setDate(d.getDate()+o); return d; };
+const minsStr   = m => { const h=Math.floor(m/60),r=m%60; return h ? `${h}時間${r?r+'分':''}` : `${m}分`; };
+const totalMins = items => items.reduce((a,i) => a+(+i.m||0), 0);
+
+let collapsed = {};
+const isCol = (o,k) => !!collapsed[`${o}__${k}`];
+const togCol = (o,k) => { collapsed[`${o}__${k}`] = !collapsed[`${o}__${k}`]; renderToday(); };
+
+let viewOff = 0;
+const getDay = o => {
+  const k = toDateStr(o);
+  if (!S.days[k]) S.days[k] = emptyDay();
+  const d = S.days[k];
+  if (!d.plan) d.plan = {朝:null,昼:null,夜:null};
+  if (!d.otherSlots) d.otherSlots = [];
+  if (!d.edits) d.edits = {};
+  if (!d.sectionOrder) d.sectionOrder = ['朝','昼','夜', ...d.otherSlots.map((_,i) => 'other:'+i)];
+  return d;
+};
+const syncOrder = day => {
+  day.sectionOrder = day.sectionOrder.filter(s => !s.startsWith('other:') || parseInt(s.split(':')[1]) < day.otherSlots.length);
+  day.otherSlots.forEach((_,i) => { if (!day.sectionOrder.includes('other:'+i)) day.sectionOrder.push('other:'+i); });
+};
+
+// アイテム取得（固定バンド／その他スロット共通）
+const itemKey   = (b,pid) => `${b}__${pid}`;
+const otherKey  = (si,pid) => `その他__slot${si}__${pid}`;
+// パターンのmemoフィールドも確実に引き継ぐ
+const patToItems = items => items.map(i => ({l:i.l, m:i.m, memo:i.memo||'', del:false}));
+const getItems  = (b,pid)  => { const d=getDay(viewOff),k=itemKey(b,pid); return d.edits[k] || patToItems((S.patterns[b]||[]).find(p=>p.id===pid)?.items||[]); };
+const getOItems = (si,pid) => { const d=getDay(viewOff),k=otherKey(si,pid); return d.edits[k] || patToItems((S.patterns.その他||[]).find(p=>p.id===pid)?.items||[]); };
+const setItems  = (b,pid,v)  => { getDay(viewOff).edits[itemKey(b,pid)] = v; };
+const setOItems = (si,pid,v) => { getDay(viewOff).edits[otherKey(si,pid)] = v; };
+// パターン選び直し時にeditsキャッシュをリセット
+const clearEdits = (day, band, pid, si) => {
+  if (si != null) {
+    const pre = `その他|slot${si}|`;
+    Object.keys(day.checked).forEach(k => { if (k.startsWith(pre)) delete day.checked[k]; });
+    delete day.edits[otherKey(si, pid)];
+    delete day.edits[`その他|slot${si}|${pid}|start`];
+  } else {
+    Object.keys(day.checked).forEach(k => { if (k.startsWith(band+'|')) delete day.checked[k]; });
+    delete day.edits[itemKey(band, pid)];
+    delete day.edits[`${band}|${pid}|start`];
+  }
+};
+
+// 起動時：editsキャッシュにmemoがない古いアイテムがあればパターンから再取得してmemoを補完
+const migrateEdits = () => {
+  let dirty = false;
+  Object.values(S.days).forEach(d => {
+    if (!d.edits) return;
+    Object.entries(d.edits).forEach(([k, items]) => {
+      if (!Array.isArray(items)) return;
+      // memoフィールドがない項目があれば補完
+      const needsFix = items.some(it => it.memo === undefined);
+      if (!needsFix) return;
+      // どのパターンか特定してmemoを補完
+      const m = k.match(/^(.+)__(.+)$/);
+      if (!m) return;
+      const [, bandOrSlot, pid] = m;
+      const band = bandOrSlot.startsWith('その他__slot') ? 'その他' : bandOrSlot;
+      const pat = (S.patterns[band]||[]).find(p => p.id === pid);
+      if (!pat) return;
+      d.edits[k] = items.map((it, i) => ({
+        ...it,
+        memo: it.memo !== undefined ? it.memo : (pat.items[i]?.memo || '')
+      }));
+      dirty = true;
+    });
+  });
+  if (dirty) save();
+};
+migrateEdits();
+
+// ─── ナビゲーション ──────────────────────────────────────
+const go = id => {
+  document.querySelectorAll('.scr').forEach(s => s.classList.remove('on'));
+  document.querySelectorAll('.nb').forEach((b,i) => b.classList.toggle('on', ['pat','today','stats'][i] === id));
+  document.getElementById('scr-'+id).classList.add('on');
+  if (id === 'today') renderToday();
+  if (id === 'stats') renderStats();
+};
+const shift = d => { viewOff += d; renderToday(); };
+
+// ─── パターン画面 ────────────────────────────────────────
+let curBand = '朝';
+const renderBTabs = () => {
+  document.getElementById('btabs').innerHTML = ALL_BANDS.map(b =>
+    `<button class="bt${b===curBand?' on':''}" data-b="${b}" onclick="selBand('${b}')">${b}</button>`
+  ).join('');
+};
+const selBand = b => { curBand = b; renderBTabs(); renderGrid(); };
+
+const renderGrid = () => {
+  const g = document.getElementById('pgrid'); g.innerHTML = '';
+  (S.patterns[curBand]||[]).forEach(p => {
+    const m = totalMins(p.items); const ts = minsStr(m);
+    const c = document.createElement('div'); c.className = 'pc';
+    c.innerHTML = `<div class="pc-actions">
+      <button class="pc-btn" onclick="event.stopPropagation();dupPat('${curBand}','${p.id}')">⿳</button>
+      <button class="pc-btn" onclick="event.stopPropagation();delPat('${curBand}','${p.id}')">×</button>
+    </div>
+    <div class="pc-name">${p.name}</div>
+    <div class="pc-meta">${ts}・${p.items.length}項目${p.memo?'<br><span style="font-size:10px">'+p.memo+'</span>':''}</div>
+    ${p.items.slice(0,3).map(i=>`<div class="pc-row"><span>${i.l}</span><span style="font-size:10px;color:#555">${i.m>0?i.m+'分':'-'}</span></div>`).join('')}
+    ${p.items.length>3?`<div style="font-size:10px;color:#555">他${p.items.length-3}件</div>`:''}`;
+    c.onclick = () => openPat(curBand, p.id);
+    g.appendChild(c);
+  });
+  const a = document.createElement('div'); a.className = 'add-pc'; a.textContent = '＋ 新規';
+  a.onclick = () => openPat(curBand, null); g.appendChild(a);
+};
+
+const dupPat = (b,id) => {
+  const orig = (S.patterns[b]||[]).find(p => p.id===id); if (!orig) return;
+  const copy = JSON.parse(JSON.stringify(orig)); copy.id = b+(S.nid++); copy.name += 'のコピー';
+  S.patterns[b].push(copy); save(); renderGrid();
+};
+const delPat = (b,id) => {
+  if (!confirm('削除しますか？')) return;
+  S.patterns[b] = S.patterns[b].filter(p => p.id!==id);
+  Object.values(S.days).forEach(d => {
+    if (b==='その他') d.otherSlots = (d.otherSlots||[]).filter(x => x!==id);
+    else if (d.plan?.[b]===id) d.plan[b] = null;
+  });
+  save(); renderGrid();
+};
+
+// パターン編集モーダル
+let editBand='朝', editPid=null;
+const openPat = (b,pid) => {
+  editBand=b; editPid=pid;
+  document.getElementById('ov-pt').textContent = pid ? `${b}のパターンを編集` : `${b}のパターンを作成`;
+  document.getElementById('op-start').value = '';
+  if (!pid) {
+    document.getElementById('op-n').value=''; document.getElementById('op-m').value='';
+    renderPItems([{l:'',m:'',memo:''}]);
+  } else {
+    const p = (S.patterns[b]||[]).find(x=>x.id===pid); if (!p) return;
+    document.getElementById('op-n').value = p.name;
+    document.getElementById('op-m').value = p.memo||'';
+    renderPItems(p.items.map(i=>({l:i.l, m:i.m, memo:i.memo||''})));
+  }
+  document.getElementById('ov-pat').classList.add('on');
+};
+const closeOv = id => document.getElementById(id).classList.remove('on');
+// 時刻計算ユーティリティ
+const timeToMins = t => { if (!t) return null; const [h,m]=t.split(':').map(Number); return h*60+m; };
+const minsToTime = m => { const h=Math.floor(((m%1440)+1440)%1440/60), mn=((m%1440)+1440)%1440%60; return `${String(h).padStart(2,'0')}:${String(mn).padStart(2,'0')}`; };
+
+const refreshTimes = () => {
+  const start = timeToMins(document.getElementById('op-start').value);
+  let cur = start;
+  document.querySelectorAll('#op-items .ir').forEach(row => {
+    const mins = parseInt(row.querySelector('.mw').value)||0;
+    const timeEl = row.querySelector('.ir-time');
+    if (start !== null && mins > 0) {
+      cur += mins;
+      timeEl.textContent = minsToTime(cur);
+    } else {
+      timeEl.textContent = '';
+    }
+  });
+};
+
+const renderPItems = items => {
+  const container = document.getElementById('op-items'); container.innerHTML = '';
+  items.forEach((it,i) => {
+    const r = document.createElement('div'); r.className = 'ir';
+    r.innerHTML = `
+      <div class="ir-top">
+        <textarea class="ir-ta" placeholder="項目名" rows="2">${it.l||''}</textarea>
+        <div class="ir-right">
+          <input class="mw" type="number" value="${it.m||''}" placeholder="分" min="0" oninput="refreshTimes()"/>
+          <div class="ir-time"></div>
+          <button class="rm" onclick="rmPI(${i})">削除</button>
+        </div>
+      </div>
+      <textarea class="ir-memo" placeholder="メモ（タップで確認できます）" rows="1">${it.memo||''}</textarea>`;
+    container.appendChild(r);
+  });
+  refreshTimes();
+};
+const getPItems = () => Array.from(document.querySelectorAll('#op-items .ir')).map(r => ({
+  l:    r.querySelector('.ir-ta').value.trim(),
+  m:    parseInt(r.querySelector('.mw').value)||0,
+  memo: r.querySelector('.ir-memo').value.trim()
+}));
+const addOI = () => renderPItems([...getPItems(), {l:'',m:'',memo:''}]);
+const rmPI  = i => { const its=getPItems(); its.splice(i,1); if(!its.length) its.push({l:'',m:'',memo:''}); renderPItems(its); };
+const savePat = () => {
+  const name=document.getElementById('op-n').value.trim(); if (!name) { alert('パターン名を入力してください'); return; }
+  const memo=document.getElementById('op-m').value.trim();
+  const items=getPItems().filter(i=>i.l); if (!items.length) { alert('項目を1つ以上追加してください'); return; }
+  if (!S.patterns[editBand]) S.patterns[editBand]=[];
+  const savedPid = editPid || (editBand+(S.nid++));
+  if (editPid) {
+    const i=S.patterns[editBand].findIndex(p=>p.id===editPid);
+    if(i>=0) S.patterns[editBand][i]={...S.patterns[editBand][i],name,memo,items};
+  } else {
+    S.patterns[editBand].push({id:savedPid,name,memo,items});
+  }
+  // パターン編集後、全日付のeditsキャッシュをクリアして最新データが反映されるようにする
+  Object.values(S.days).forEach(d => {
+    if (!d.edits) return;
+    delete d.edits[itemKey(editBand, savedPid)];
+    (d.otherSlots||[]).forEach((slotPid, si) => {
+      if (slotPid === savedPid) delete d.edits[otherKey(si, savedPid)];
+    });
+  });
+  save(); closeOv('ov-pat'); renderGrid();
+};
+
+// パターン選択モーダル
+let selCb = null;
+const openSel = (title,pats,cur,cb) => {
+  selCb=cb;
+  document.getElementById('ov-st').textContent = title;
+  document.getElementById('ov-sl').innerHTML = '';
+  pats.forEach(p => {
+    const m=totalMins(p.items); const ts=minsStr(m);
+    const el = document.createElement('div'); el.className='smi';
+    el.innerHTML = `<div><div class="smi-name">${p.name}</div><div class="smi-meta">${ts}・${p.items.length}項目${p.memo?' · '+p.memo:''}</div></div><div class="smi-ck${p.id===cur?' on':''}">✓</div>`;
+    el.onclick = () => { closeOv('ov-sel'); cb?.(p.id); };
+    document.getElementById('ov-sl').appendChild(el);
+  });
+  document.getElementById('ov-sel').classList.add('on');
+};
+
+// 項目挿入モーダル
+let insCtx = null;
+const openIns = (b,pid,after,slot) => {
+  insCtx={b,pid,after,slot};
+  document.getElementById('oi-l').value=''; document.getElementById('oi-m').value='';
+  document.getElementById('ov-ins').classList.add('on');
+  setTimeout(() => document.getElementById('oi-l').focus(), 50);
+};
+const confirmIns = () => {
+  const l=document.getElementById('oi-l').value.trim(); if(!l) return;
+  const m=parseInt(document.getElementById('oi-m').value)||0;
+  const memo=document.getElementById('oi-memo').value.trim();
+  const {b,pid,after,slot} = insCtx;
+  if (b==='その他') { const it=getOItems(slot,pid); it.splice(after+1,0,{l,m,memo,del:false}); setOItems(slot,pid,it); }
+  else              { const it=getItems(b,pid);     it.splice(after+1,0,{l,m,memo,del:false}); setItems(b,pid,it); }
+  save(); closeOv('ov-ins'); renderToday();
+};
+
+// ─── 統計計算 ────────────────────────────────────────────
+const calcStats = (items, prefix, checked) => {
+  let tot=0, dn=0;
+  items.forEach((it,i) => { if (!it.del) { tot++; if (checked[`${prefix}|${i}`]) dn++; } });
+  return {tot, dn, pct: tot ? Math.round(dn/tot*100) : null};
+};
+const fixedStats = band => {
+  const day=getDay(viewOff), pid=day.plan[band]; if (!pid) return {tot:0,dn:0,pct:null};
+  return calcStats(getItems(band,pid), `${band}|${pid}`, day.checked);
+};
+const otherStats = (si,pid) => {
+  const day=getDay(viewOff);
+  return calcStats(getOItems(si,pid), `その他|slot${si}|${pid}`, day.checked);
+};
+const fixedMins  = band => { const day=getDay(viewOff),pid=day.plan[band]; return pid ? totalMins(getItems(band,pid).filter(i=>!i.del)) : 0; };
+const otherMins  = (si,pid) => totalMins(getOItems(si,pid).filter(i=>!i.del));
+
+// ─── 今日の予定 ──────────────────────────────────────────
+const mkInsRow = (b,pid,after,slot) => {
+  const z=document.createElement('div'); z.className='ins-row';
+  const btn=document.createElement('button'); btn.className='ins-btn'; btn.textContent='＋ ここに追加';
+  btn.onclick = e => { e.stopPropagation(); openIns(b,pid,after,slot); };
+  z.appendChild(btn); return z;
+};
+
+const setStartTime = (b,pid,si,val) => {
+  const day = getDay(viewOff);
+  const key = si!=null ? `その他|slot${si}|${pid}|start` : `${b}|${pid}|start`;
+  day.edits[key] = val;
+  save(); renderToday();
+};
+
+const toggleCheck = (b,pid,idx,si) => {
+  const day=getDay(viewOff);
+  const k = si!=null ? `その他|slot${si}|${pid}|${idx}` : `${b}|${pid}|${idx}`;
+  day.checked[k] = !day.checked[k];
+  save(); updateHistory(); renderToday();
+};
+const deleteItem = (b,pid,idx,si) => {
+  const items = si!=null ? getOItems(si,pid) : getItems(b,pid);
+  items[idx] = {...items[idx], del:true};
+  const day=getDay(viewOff);
+  const k = si!=null ? `その他|slot${si}|${pid}|${idx}` : `${b}|${pid}|${idx}`;
+  delete day.checked[k];
+  if (si!=null) setOItems(si,pid,items); else setItems(b,pid,items);
+  save(); renderToday();
+};
+
+// メモポップアップ
+const showMemo = (label, memo) => {
+  document.getElementById('memo-title').textContent = label;
+  document.getElementById('memo-body').textContent = memo;
+  document.getElementById('memo-popup').classList.add('on');
+};
+
+const buildChecklist = (b,pid,si,day) => {
+  const items = si!=null ? getOItems(si,pid) : getItems(b,pid);
+  const cl = document.createElement('div'); cl.className='cl';
+  cl.appendChild(mkInsRow(b,pid,-1,si));
+
+  // 表示する項目だけ集めて時刻を計算
+  const visible = items.map((it,idx) => ({it,idx})).filter(({it}) => !it.del);
+  // dayのstartTimeを参照（パターン単位で保持）
+  const pat = si!=null ? (S.patterns.その他||[]).find(p=>p.id===pid) : (S.patterns[b]||[]).find(p=>p.id===pid);
+  const startKey = si!=null ? `その他|slot${si}|${pid}|start` : `${b}|${pid}|start`;
+  const startTime = day.edits[startKey] ?? null; // HH:MM or null
+  let curMins = timeToMins(startTime);
+
+  visible.forEach(({it,idx}) => {
+    const ck = si!=null ? `その他|slot${si}|${pid}|${idx}` : `${b}|${pid}|${idx}`;
+    const done = !!day.checked[ck];
+    const hasMemo = !!(it.memo && it.memo.trim());
+
+    // 終了目安時刻
+    let endTime = '';
+    if (curMins !== null && it.m > 0) { curMins += it.m; endTime = minsToTime(curMins); }
+    else if (curMins !== null && it.m === 0) { /* 時間0はスキップ */ }
+
+    const row = document.createElement('div');
+    row.className = 'ci' + (done?' done':'') + (hasMemo?' ci-has-memo':'');
+    row.draggable = !hasMemo; row.dataset.b=b; row.dataset.pid=pid; row.dataset.idx=idx;
+    if (si!=null) row.dataset.si=si;
+
+    row.innerHTML = `<span class="dh">⠿</span>
+      <div class="ck${done?' on':''}">✓</div>
+      <span class="ci-lbl">${it.l}${hasMemo?' 📝':''}</span>
+      ${endTime?`<span class="ci-time">${endTime}</span>`:''}
+      <span class="ci-min">${it.m>0?it.m+'分':''}</span>
+      <button class="ci-del">🗑</button>`;
+
+    // イベントをaddEventListenerで安全に登録
+    row.querySelector('.ck').addEventListener('click', () => toggleCheck(b,pid,idx,si));
+    row.querySelector('.ci-lbl').addEventListener('click', () => {
+      if (hasMemo) showMemo(it.l, it.memo);
+      else toggleCheck(b,pid,idx,si);
+    });
+    row.querySelector('.ci-del').addEventListener('click', () => deleteItem(b,pid,idx,si));
+    row.addEventListener('dragstart', onItemDS);
+    row.addEventListener('dragover',  onItemDO);
+    row.addEventListener('drop',      onItemDrop);
+    row.addEventListener('dragend',   onItemDE);
+    cl.appendChild(row);
+    cl.appendChild(mkInsRow(b,pid,idx,si));
+  });
+  return cl;
+};
+
+const makeSection = (sk, day, otherPats) => {
+  const isO = sk.startsWith('other:');
+  const si   = isO ? parseInt(sk.split(':')[1]) : null;
+  const band = isO ? 'その他' : sk;
+  const pid  = isO ? day.otherSlots[si] : day.plan[band];
+  const pats = isO ? otherPats : (S.patterns[band]||[]);
+  const {tot,dn,pct} = isO ? otherStats(si,pid||'') : fixedStats(band);
+  const mins = isO ? (pid?otherMins(si,pid):0) : fixedMins(band);
+  const pname = pid ? (pats.find(p=>p.id===pid)||{}).name||'' : '';
+  const collapsed = isCol(viewOff, sk);
+
+  const sec = document.createElement('div'); sec.className='t-band';
+  sec.draggable = true;
+  sec.addEventListener('dragstart', e => { if(e.target.closest('.ci')||e.target.closest('.dh')) return; onSecDS(e,sk); });
+  sec.addEventListener('dragover',  e => { if(e.target.closest('.ci')) return; e.stopPropagation(); onSecDO(e,sk); });
+  sec.addEventListener('drop',      e => { if(e.target.closest('.ci')) return; e.stopPropagation(); onSecDrop(e,sk); });
+  sec.addEventListener('dragend',   onSecDE);
+
+  // ヘッダー
+  const hdr = document.createElement('div'); hdr.className='band-toggle';
+  const grip = document.createElement('span'); grip.className='sec-grip'; grip.textContent='⠿';
+  const inner = document.createElement('div'); inner.className='band-inner';
+  inner.onclick = () => togCol(viewOff, sk);
+  inner.innerHTML = `<div class="bdot ${band}"></div><div class="btitle">${band}</div>
+    ${pname?`<span class="bpat">${pname}</span>`:''}
+    ${mins?`<span class="bmins" style="margin-left:6px">${minsStr(mins)}</span>`:''}
+    ${pct!==null?`<span class="bpct" style="margin-left:4px">${dn}/${tot}</span>`:''}
+    <span class="bchevron${collapsed?'':' open'}">∨</span>`;
+  hdr.appendChild(grip); hdr.appendChild(inner);
+  if (isO) {
+    const rm=document.createElement('button'); rm.style.cssText='padding:3px 8px;border:none;background:transparent;cursor:pointer;color:#D4537E;font-size:12px;flex-shrink:0';
+    rm.textContent='×';
+    rm.onclick = e => { e.stopPropagation(); Object.keys(day.checked).forEach(k=>{if(k.startsWith(`その他|slot${si}|`))delete day.checked[k];}); day.otherSlots.splice(si,1); syncOrder(day); save(); renderToday(); };
+    hdr.appendChild(rm);
+  }
+  sec.appendChild(hdr);
+
+  // ボディ
+  const body = document.createElement('div'); body.className='band-body'+(collapsed?'':' open');
+  if (!pid && !isO) {
+    body.innerHTML = `<div class="sel-label">パターンを選ぶ</div>`;
+    const row=document.createElement('div'); row.className='ps-row';
+    pats.forEach(p => { const btn=document.createElement('button'); btn.className='psb'; btn.textContent=p.name; btn.onclick=()=>{ clearEdits(day, band, null, si); day.plan[band]=p.id; save(); renderToday(); }; row.appendChild(btn); });
+    body.appendChild(row);
+  } else if (pid) {
+    const cb=document.createElement('div'); cb.className='chosen-bar';
+    const chg=document.createElement('button'); chg.className='chg-btn'; chg.textContent='↻ 変更';
+    chg.onclick = e => { e.stopPropagation(); openSel(isO?'パターンを変更':`${band}のパターンを選ぶ`, pats, pid, newId => {
+      clearEdits(day, band, pid, si);
+      if (isO) day.otherSlots[si] = newId;
+      else day.plan[band] = newId;
+      save(); renderToday();
+    }); };
+    cb.appendChild(chg); body.appendChild(cb);
+
+    // 開始時刻入力（予定画面でも設定可能）
+    const stKey = si!=null ? `その他|slot${si}|${pid}|start` : `${band}|${pid}|start`;
+    const stVal = day.edits[stKey] ?? '';
+    const stRow = document.createElement('div');
+    stRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:5px 8px;background:#161616;border-radius:8px;border:.5px solid #222';
+    stRow.innerHTML = `<span style="font-size:11px;color:#555">開始時刻</span>
+      <input type="time" value="${stVal}" style="padding:3px 7px;border:.5px solid #333;border-radius:6px;font-size:12px;background:#111;color:#e8e8e8;width:90px"
+        oninput="setStartTime('${band}','${pid}',${si??'null'},this.value)"/>
+      <span style="font-size:11px;color:#555">→ 終了目安を表示</span>`;
+    body.appendChild(stRow);
+
+    body.appendChild(buildChecklist(band, pid, si, day));
+  }
+  sec.appendChild(body);
+  return sec;
+};
+
+const renderToday = () => {
+  const d=toDate(viewOff), isToday=viewOff===0;
+  document.getElementById('dn-date').innerHTML = `${d.getMonth()+1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`+(isToday?'<span class="today-badge">今日</span>':'');
+  document.getElementById('dn-sub').textContent = isToday ? '' : viewOff>0 ? `${viewOff}日後` : `${-viewOff}日前`;
+  const day=getDay(viewOff); syncOrder(day);
+  const wrap=document.getElementById('tbands'); wrap.innerHTML='';
+  const oP=S.patterns.その他||[];
+  day.sectionOrder.forEach(sk => wrap.appendChild(makeSection(sk,day,oP)));
+  const addBtn=document.createElement('button'); addBtn.className='add-other';
+  addBtn.innerHTML='✦ <span style="color:#D4537E;font-weight:500">その他を追加</span>';
+  addBtn.onclick = () => openSel('その他のパターンを選ぶ', oP, null, pid => {
+    const si=day.otherSlots.length; day.otherSlots.push(pid); day.sectionOrder.push('other:'+si); save(); renderToday();
+  });
+  wrap.appendChild(addBtn);
+  updateProgress();
+};
+
+const updateProgress = () => {
+  const day=getDay(viewOff); let tot=0,dn=0;
+  FIXED.forEach(b => { const pid=day.plan[b]; if(!pid) return; getItems(b,pid).forEach((it,i)=>{if(!it.del){tot++;if(day.checked[`${b}|${pid}|${i}`])dn++;}}); });
+  day.otherSlots.forEach((pid,si) => { getOItems(si,pid).forEach((it,i)=>{if(!it.del){tot++;if(day.checked[`その他|slot${si}|${pid}|${i}`])dn++;}}); });
+  const pct=tot?Math.round(dn/tot*100):0;
+  document.getElementById('pfill').style.width=pct+'%';
+  document.getElementById('psub').textContent=`${dn} / ${tot} 完了`;
+};
+
+const updateHistory = () => {
+  const day=getDay(viewOff); let tot=0,dn=0;
+  const bp={朝:null,昼:null,夜:null,その他:null};
+  FIXED.forEach(b => { const pid=day.plan[b]; if(!pid) return; let bt=0,bd=0; getItems(b,pid).forEach((it,i)=>{if(!it.del){bt++;tot++;if(day.checked[`${b}|${pid}|${i}`]){bd++;dn++;}}}); bp[b]=bt?Math.round(bd/bt*100):null; });
+  let ot=0,od=0; day.otherSlots.forEach((pid,si) => { getOItems(si,pid).forEach((it,i)=>{if(!it.del){ot++;tot++;if(day.checked[`その他|slot${si}|${pid}|${i}`]){od++;dn++;}}}); }); bp.その他=ot?Math.round(od/ot*100):null;
+  const pct=tot?Math.round(dn/tot*100):0;
+  const k=toDateStr(viewOff), i=S.history.findIndex(h=>h.date===k);
+  if (i>=0) { S.history[i].pct=pct; S.history[i].bands=bp; } else S.history.push({date:k,pct,bands:bp});
+  save();
+};
+
+// ─── 記録 ────────────────────────────────────────────────
+const renderStats = () => {
+  const te=S.history.find(h=>h.date===new Date().toDateString()); const tp=te?te.pct:0;
+  const grid=document.getElementById('bs-grid'); grid.innerHTML='';
+  const tc=document.createElement('div'); tc.className='bs-card full';
+  tc.innerHTML=`<div class="bs-label">📊 総合</div><div class="bs-val">${tp}%</div><div class="bs-bar-bg"><div class="bs-bar" style="width:${tp}%;background:#1D9E75"></div></div>`;
+  grid.appendChild(tc);
+  [{b:'朝',icon:'☀️'},{b:'昼',icon:'☕'},{b:'夜',icon:'🌙'},{b:'その他',icon:'✦'}].forEach(({b,icon}) => {
+    const pct=te?.bands?.[b]??null; const c=BAND_COLOR[b];
+    const card=document.createElement('div'); card.className='bs-card';
+    card.innerHTML=`<div class="bs-label">${icon} ${b}</div><div class="bs-val">${pct!==null?pct+'%':'—'}</div>${pct!==null?`<div class="bs-bar-bg"><div class="bs-bar" style="width:${pct}%;background:${c}"></div></div>`:''}`;
+    grid.appendChild(card);
+  });
+  document.getElementById('wbars').innerHTML = [...S.history].slice(-7).map(h => {
+    const d=new Date(h.date);
+    return `<div class="wd"><div class="wbg"><div class="wb" style="height:${h.pct}%"></div></div><div class="wp">${h.pct}%</div><div class="wl">${WDAYS[d.getDay()]}</div></div>`;
+  }).join('');
+};
+
+// ─── ドラッグ＆ドロップ（セクション） ───────────────────
+let secDragKey = null;
+const onSecDS   = (e,sk) => { secDragKey=sk; e.dataTransfer.effectAllowed='move'; e.currentTarget.closest('.t-band').classList.add('sec-dragging'); };
+const onSecDO   = (e,sk) => { e.preventDefault(); if(secDragKey===sk) return; document.querySelectorAll('.t-band.sec-drag-over').forEach(el=>el.classList.remove('sec-drag-over')); e.currentTarget.closest('.t-band').classList.add('sec-drag-over'); };
+const onSecDrop = (e,sk) => {
+  e.preventDefault(); document.querySelectorAll('.t-band').forEach(el=>{el.classList.remove('sec-dragging');el.classList.remove('sec-drag-over');});
+  if (!secDragKey||secDragKey===sk) return;
+  const or=getDay(viewOff).sectionOrder; const fi=or.indexOf(secDragKey),ti=or.indexOf(sk);
+  if (fi<0||ti<0) return; or.splice(fi,1); or.splice(ti,0,secDragKey); secDragKey=null; save(); renderToday();
+};
+const onSecDE   = () => { document.querySelectorAll('.t-band').forEach(el=>{el.classList.remove('sec-dragging');el.classList.remove('sec-drag-over');}); secDragKey=null; };
+
+// ─── ドラッグ＆ドロップ（アイテム） ─────────────────────
+let itemDragEl = null;
+const onItemDS   = e => { itemDragEl=e.currentTarget; e.currentTarget.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; };
+const onItemDO   = e => { e.preventDefault(); document.querySelectorAll('.ci.drag-over').forEach(el=>el.classList.remove('drag-over')); e.currentTarget.classList.add('drag-over'); };
+const onItemDE   = () => { document.querySelectorAll('.ci').forEach(el=>{el.classList.remove('dragging');el.classList.remove('drag-over');}); itemDragEl=null; };
+const onItemDrop = e => {
+  e.preventDefault(); const tgt=e.currentTarget; if (!itemDragEl||itemDragEl===tgt) return;
+  const sb=itemDragEl.dataset.b, sp=itemDragEl.dataset.pid, si2=parseInt(itemDragEl.dataset.idx);
+  const tb=tgt.dataset.b, tp=tgt.dataset.pid, ti=parseInt(tgt.dataset.idx);
+  if (sb!==tb||sp!==tp) return;
+  const isO=sb==='その他', sSlot=isO?parseInt(itemDragEl.dataset.si):null, tSlot=isO?parseInt(tgt.dataset.si):null;
+  if (isO&&sSlot!==tSlot) return;
+  const items=isO?getOItems(sSlot,sp):getItems(sb,sp);
+  const vis=items.map((it,i)=>it.del?null:i).filter(x=>x!==null);
+  const fi=vis.indexOf(si2), ti2=vis.indexOf(ti); if (fi<0||ti2<0) return;
+  const moved=vis[fi]; vis.splice(fi,1); vis.splice(ti2,0,moved);
+  const newItems=vis.map(i=>items[i]);
+  const day=getDay(viewOff), nc={};
+  const pfx=isO?`その他|slot${sSlot}|${sp}|`:`${sb}|${sp}|`;
+  Object.keys(day.checked).forEach(k=>{if(k.startsWith(pfx)){const i2=parseInt(k.split('|').pop()),np=vis.indexOf(i2);if(np>=0)nc[pfx+np]=day.checked[k];}else nc[k]=day.checked[k];});
+  day.checked=nc;
+  if (isO) setOItems(sSlot,sp,[...newItems,...items.filter(i=>i.del)]);
+  else setItems(sb,sp,[...newItems,...items.filter(i=>i.del)]);
+  save(); renderToday();
+};
+
+// ─── 初期化 ──────────────────────────────────────────────
+renderBTabs(); renderGrid();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
