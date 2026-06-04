@@ -93,6 +93,9 @@ body{font-family:-apple-system,'Hiragino Sans',sans-serif;background:#0f0f0f;col
 .ins-row{display:flex;align-items:center;justify-content:center;height:20px;opacity:0;transition:opacity .12s}
 .ins-row:hover{opacity:1}
 .ins-btn{padding:2px 9px;border-radius:999px;border:.5px dashed #333;background:#111;font-size:10px;color:#666;cursor:pointer}
+.pat-ins-row{height:24px;opacity:0.4;transition:opacity .12s}
+.pat-ins-row:hover{opacity:1}
+.pat-ins-row.drag-over{opacity:1;background:#0d2a1f;border-radius:8px;border:.5px dashed #1D9E75}
 /* stats */
 .bs-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:14px}
 .bs-card{background:#1a1a1a;border-radius:8px;padding:10px 12px}
@@ -403,7 +406,8 @@ function initState() {
   };
 }
 function emptyDay() {
-  return {plan:{朝:null,昼:null,夜:null}, otherSlots:[], sectionOrder:['朝','昼','夜'], checked:{}, edits:{}};
+  // デフォルト: 朝→その他(未選択)×2→昼→その他(未選択)×2→夜
+  return {plan:{朝:null,昼:null,夜:null}, otherSlots:[null,null,null,null], sectionOrder:['朝','other:0','other:1','昼','other:2','other:3','夜'], checked:{}, edits:{}};
 }
 
 let S;
@@ -454,7 +458,13 @@ const getDay = o => {
   return d;
 };
 const syncOrder = day => {
-  day.sectionOrder = day.sectionOrder.filter(s => !s.startsWith('other:') || parseInt(s.split(':')[1]) < day.otherSlots.length);
+  // 削除されたスロットをsectionOrderから除去
+  day.sectionOrder = day.sectionOrder.filter(s => {
+    if (!s.startsWith('other:')) return true;
+    const i = parseInt(s.split(':')[1]);
+    return i < day.otherSlots.length;
+  });
+  // 新しいスロットをsectionOrderに追加
   day.otherSlots.forEach((_,i) => { if (!day.sectionOrder.includes('other:'+i)) day.sectionOrder.push('other:'+i); });
 };
 
@@ -464,7 +474,7 @@ const otherKey  = (si,pid) => `その他__slot${si}__${pid}`;
 // パターンのmemoフィールドも確実に引き継ぐ
 const patToItems = items => items.map(i => ({l:i.l, m:i.m, memo:i.memo||'', del:false}));
 const getItems  = (b,pid)  => { const d=getDay(viewOff),k=itemKey(b,pid); return d.edits[k] || patToItems((S.patterns[b]||[]).find(p=>p.id===pid)?.items||[]); };
-const getOItems = (si,pid) => { const d=getDay(viewOff),k=otherKey(si,pid); return d.edits[k] || patToItems((S.patterns.その他||[]).find(p=>p.id===pid)?.items||[]); };
+const getOItems = (si,pid) => { if (!pid) return []; const d=getDay(viewOff),k=otherKey(si,pid); return d.edits[k] || patToItems((S.patterns.その他||[]).find(p=>p.id===pid)?.items||[]); };
 const setItems  = (b,pid,v)  => { getDay(viewOff).edits[itemKey(b,pid)] = v; };
 const setOItems = (si,pid,v) => { getDay(viewOff).edits[otherKey(si,pid)] = v; };
 // パターン選び直し時にeditsキャッシュをリセット
@@ -600,30 +610,82 @@ const refreshTimes = () => {
   });
 };
 
+// パターン編集モーダル内のDnD用変数
+let patDragIdx = null;
+
 const renderPItems = items => {
   const container = document.getElementById('op-items'); container.innerHTML = '';
+
+  // 先頭の挿入ボタン
+  container.appendChild(makePatInsBtn(0));
+
   items.forEach((it,i) => {
-    const r = document.createElement('div'); r.className = 'ir';
+    // 項目行
+    const r = document.createElement('div'); r.className = 'ir'; r.draggable = true; r.dataset.i = i;
     r.innerHTML = `
       <div class="ir-top">
-        <textarea class="ir-ta" placeholder="項目名" rows="2">${it.l||''}</textarea>
+        <span class="dh" style="cursor:grab;color:#444;font-size:16px;padding:4px 4px 0 0;flex-shrink:0">⠿</span>
+        <textarea class="ir-ta" placeholder="項目名" rows="2">${(it.l||'').replace(/</g,'&lt;')}</textarea>
         <div class="ir-right">
           <input class="mw" type="number" value="${it.m||''}" placeholder="分" min="0" oninput="refreshTimes()"/>
           <div class="ir-time"></div>
-          <button class="rm" onclick="rmPI(${i})">削除</button>
+          <button class="rm">削除</button>
         </div>
       </div>
-      <textarea class="ir-memo" placeholder="メモ（タップで確認できます）" rows="1">${it.memo||''}</textarea>`;
+      <textarea class="ir-memo" placeholder="メモ（タップで確認できます）" rows="1">${(it.memo||'').replace(/</g,'&lt;')}</textarea>`;
+
+    r.querySelector('.rm').addEventListener('click', () => rmPI(i));
+    r.addEventListener('dragstart', e => {
+      patDragIdx = i; r.style.opacity = '0.4'; e.dataTransfer.effectAllowed = 'move';
+    });
+    r.addEventListener('dragend', () => {
+      patDragIdx = null; r.style.opacity = '';
+      document.querySelectorAll('.pat-ins-row').forEach(el => el.classList.remove('drag-over'));
+    });
     container.appendChild(r);
+
+    // 項目の後の挿入ボタン
+    container.appendChild(makePatInsBtn(i+1));
   });
   refreshTimes();
 };
+
+function makePatInsBtn(afterIdx) {
+  const z = document.createElement('div');
+  z.className = 'ins-row pat-ins-row'; z.dataset.after = afterIdx;
+  const btn = document.createElement('button'); btn.className = 'ins-btn'; btn.textContent = '＋ ここに追加';
+  btn.addEventListener('click', () => {
+    const its = getPItems(); its.splice(afterIdx, 0, {l:'',m:'',memo:''});
+    renderPItems(its);
+    // 挿入した行のtextareaにフォーカス
+    setTimeout(() => {
+      const rows = document.querySelectorAll('#op-items .ir');
+      if (rows[afterIdx]) rows[afterIdx].querySelector('.ir-ta').focus();
+    }, 50);
+  });
+  z.appendChild(btn);
+  // DnD: ドロップ先
+  z.addEventListener('dragover', e => { e.preventDefault(); z.classList.add('drag-over'); });
+  z.addEventListener('dragleave', () => z.classList.remove('drag-over'));
+  z.addEventListener('drop', e => {
+    e.preventDefault(); z.classList.remove('drag-over');
+    if (patDragIdx === null) return;
+    const its = getPItems();
+    const moved = its.splice(patDragIdx, 1)[0];
+    const insertAt = afterIdx > patDragIdx ? afterIdx - 1 : afterIdx;
+    its.splice(insertAt, 0, moved);
+    patDragIdx = null;
+    renderPItems(its);
+  });
+  return z;
+}
+
 const getPItems = () => Array.from(document.querySelectorAll('#op-items .ir')).map(r => ({
   l:    r.querySelector('.ir-ta').value.trim(),
   m:    parseInt(r.querySelector('.mw').value)||0,
   memo: r.querySelector('.ir-memo').value.trim()
 }));
-const addOI = () => renderPItems([...getPItems(), {l:'',m:'',memo:''}]);
+const addOI = () => { const its=getPItems(); its.push({l:'',m:'',memo:''}); renderPItems(its); setTimeout(()=>{ const rows=document.querySelectorAll('#op-items .ir'); if(rows.length) rows[rows.length-1].querySelector('.ir-ta').focus(); },50); };
 const rmPI  = i => { const its=getPItems(); its.splice(i,1); if(!its.length) its.push({l:'',m:'',memo:''}); renderPItems(its); };
 const savePat = () => {
   const name=document.getElementById('op-n').value.trim(); if (!name) { alert('パターン名を入力してください'); return; }
@@ -693,6 +755,7 @@ const fixedStats = band => {
   return calcStats(getItems(band,pid), `${band}|${pid}`, day.checked);
 };
 const otherStats = (si,pid) => {
+  if (!pid) return {tot:0, dn:0, pct:null};
   const day=getDay(viewOff);
   return calcStats(getOItems(si,pid), `その他|slot${si}|${pid}`, day.checked);
 };
@@ -821,17 +884,27 @@ const makeSection = (sk, day, otherPats) => {
   if (isO) {
     const rm=document.createElement('button'); rm.style.cssText='padding:3px 8px;border:none;background:transparent;cursor:pointer;color:#D4537E;font-size:12px;flex-shrink:0';
     rm.textContent='×';
-    rm.onclick = e => { e.stopPropagation(); Object.keys(day.checked).forEach(k=>{if(k.startsWith(`その他|slot${si}|`))delete day.checked[k];}); day.otherSlots.splice(si,1); syncOrder(day); save(); renderToday(); };
+    rm.onclick = e => { e.stopPropagation(); if(pid){Object.keys(day.checked).forEach(k=>{if(k.startsWith(`その他|slot${si}|`))delete day.checked[k];});} day.otherSlots.splice(si,1); syncOrder(day); save(); renderToday(); };
     hdr.appendChild(rm);
   }
   sec.appendChild(hdr);
 
   // ボディ
   const body = document.createElement('div'); body.className='band-body'+(collapsed?'':' open');
-  if (!pid && !isO) {
+  if (!pid) {
+    // 未選択（固定バンドもその他スロットも同じUI）
     body.innerHTML = `<div class="sel-label">パターンを選ぶ</div>`;
     const row=document.createElement('div'); row.className='ps-row';
-    pats.forEach(p => { const btn=document.createElement('button'); btn.className='psb'; btn.textContent=p.name; btn.onclick=()=>{ clearEdits(day, band, null, si); day.plan[band]=p.id; save(); renderToday(); }; row.appendChild(btn); });
+    pats.forEach(p => {
+      const btn=document.createElement('button'); btn.className='psb'; btn.textContent=p.name;
+      btn.onclick=()=>{
+        clearEdits(day, band, null, si);
+        if (isO) day.otherSlots[si]=p.id;
+        else day.plan[band]=p.id;
+        save(); renderToday();
+      };
+      row.appendChild(btn);
+    });
     body.appendChild(row);
   } else if (pid) {
     const cb=document.createElement('div'); cb.className='chosen-bar';
