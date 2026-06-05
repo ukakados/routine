@@ -1076,7 +1076,7 @@ const loadFromCloud = async () => {
       const cloudS = JSON.parse(rows[0].data);
       if (cloudS && cloudS.patterns) {
         S = cloudS;
-        sv();
+        save();
         return true;
       }
     }
@@ -1124,7 +1124,7 @@ const doLogout = () => {
 };
 
 // saveをラップして同期も行う
-const originalSv = sv;
+const originalSv = save;
 // svが呼ばれるたびにクラウドにも保存（debounce）
 let syncTimer = null;
 const svWithSync = () => {
