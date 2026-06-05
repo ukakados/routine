@@ -159,6 +159,13 @@ body{font-family:-apple-system,'Hiragino Sans',sans-serif;background:#0f0f0f;col
 </style>
 </head>
 <body>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+  <span id="sync-status" style="font-size:11px;color:#666">未ログイン</span>
+  <div style="display:flex;gap:6px">
+    <button onclick="openLoginModal()" style="padding:4px 10px;border:.5px solid #333;border-radius:999px;background:transparent;font-size:11px;color:#888;cursor:pointer">☁ 同期</button>
+    <button onclick="syncToCloud()" style="padding:4px 10px;border:.5px solid #333;border-radius:999px;background:transparent;font-size:11px;color:#888;cursor:pointer">↑ 今すぐ保存</button>
+  </div>
+</div>
 <nav class="nav">
   <button class="nb on" onclick="go('pat')">📋 パターン</button>
   <button class="nb" onclick="go('today')">📅 予定</button>
@@ -1028,9 +1035,132 @@ const onItemDrop = e => {
   save(); renderToday();
 };
 
+
+// ─── Supabase 同期 ────────────────────────────────────────────
+const SB_URL = 'https://uneihtafyexubpdbkgkq.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVuZWlodGFmeWV4dWJwZGJrZ2txIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MzM3NjYsImV4cCI6MjA5NjIwOTc2Nn0.C3YG453RUJk2y5Mjy6AwVsc7BbmaV2Bi2G0G83xHGZQ';
+const SB_USER_KEY = 'sb_user_id';
+
+let sbUserId = localStorage.getItem(SB_USER_KEY) || null;
+
+// Supabase fetch ラッパー
+const sbFetch = (path, opts={}) => fetch(SB_URL + path, {
+  ...opts,
+  headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', ...(opts.headers||{}) }
+});
+
+// クラウドにデータを保存
+const syncToCloud = async () => {
+  if (!sbUserId) return;
+  try {
+    const data = JSON.stringify(S);
+    // upsert（あれば更新、なければ挿入）
+    await sbFetch('/rest/v1/routine_data', {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify({ user_id: sbUserId, data })
+    });
+    showSyncStatus('✓ 同期完了');
+  } catch(e) {
+    showSyncStatus('⚠ 同期失敗');
+  }
+};
+
+// クラウドからデータを取得
+const loadFromCloud = async () => {
+  if (!sbUserId) return false;
+  try {
+    const res = await sbFetch(`/rest/v1/routine_data?user_id=eq.${encodeURIComponent(sbUserId)}&select=data&order=created_at.desc&limit=1`);
+    const rows = await res.json();
+    if (rows && rows.length > 0 && rows[0].data) {
+      const cloudS = JSON.parse(rows[0].data);
+      if (cloudS && cloudS.patterns) {
+        S = cloudS;
+        sv();
+        return true;
+      }
+    }
+  } catch(e) {}
+  return false;
+};
+
+// 同期ステータス表示
+const showSyncStatus = (msg) => {
+  const el = document.getElementById('sync-status');
+  if (el) { el.textContent = msg; setTimeout(()=>{ el.textContent = sbUserId ? '☁ ' + sbUserId.substring(0,8)+'...' : '未ログイン'; }, 2000); }
+};
+
+// ログインモーダルを開く
+const openLoginModal = () => {
+  document.getElementById('ov-login').classList.add('on');
+  setTimeout(()=>document.getElementById('login-id').focus(), 50);
+};
+
+// ログイン処理
+const doLogin = async () => {
+  const id = document.getElementById('login-id').value.trim();
+  if (!id || id.length < 3) { alert('3文字以上のIDを入力してください'); return; }
+  sbUserId = id;
+  localStorage.setItem(SB_USER_KEY, id);
+  document.getElementById('ov-login').classList.remove('on');
+  document.getElementById('sync-status').textContent = '読み込み中...';
+  const loaded = await loadFromCloud();
+  if (loaded) {
+    renderBTabs(); renderGrid(); renderToday();
+    showSyncStatus('✓ データを読み込みました');
+  } else {
+    // 初回：ローカルデータをクラウドに送る
+    await syncToCloud();
+    showSyncStatus('✓ 新規登録完了');
+  }
+};
+
+// ログアウト
+const doLogout = () => {
+  if (!confirm('ログアウトしますか？（このデバイスのデータは保持されます）')) return;
+  sbUserId = null;
+  localStorage.removeItem(SB_USER_KEY);
+  document.getElementById('sync-status').textContent = '未ログイン';
+};
+
+// saveをラップして同期も行う
+const originalSv = sv;
+// svが呼ばれるたびにクラウドにも保存（debounce）
+let syncTimer = null;
+const svWithSync = () => {
+  originalSv();
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncToCloud, 1500);
+};
+
+// 起動時にログイン済みならクラウドから読み込み
+(async () => {
+  if (sbUserId) {
+    document.getElementById('sync-status').textContent = '同期中...';
+    const loaded = await loadFromCloud();
+    if (loaded) { renderBTabs(); renderGrid(); showSyncStatus('✓ 同期済み'); }
+    else showSyncStatus('☁ ' + sbUserId.substring(0,8)+'...');
+  }
+})();
+
 // ─── 初期化 ──────────────────────────────────────────────
 renderBTabs(); renderGrid();
 </script>
+
+<!-- ログインモーダル -->
+<div class="ov" id="ov-login"><div class="od" onclick="event.stopPropagation()">
+  <h3>☁ クラウド同期ログイン</h3>
+  <p style="font-size:12px;color:#888;margin-bottom:12px;line-height:1.6">
+    自分だけのIDを決めて入力してください。<br>
+    全端末で同じIDを使うとデータが同期されます。<br>
+    （例：<code style="background:#222;padding:1px 5px;border-radius:4px">ukakados2024</code>）
+  </p>
+  <div class="fl"><label>マイID（英数字3文字以上）</label><input id="login-id" placeholder="例：ukakados2024" autocomplete="off"/></div>
+  <div class="of">
+    <button class="bc" onclick="closeOv('ov-login')">キャンセル</button>
+    <button class="bp" onclick="doLogin()">ログイン / 同期開始</button>
+  </div>
+</div></div>
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(()=>{});
