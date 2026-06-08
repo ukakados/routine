@@ -942,24 +942,40 @@ const buildEditMode = (sk, b, pid, si, day) => {
     list.appendChild(makeEditInsBtn(sk,b,pid,si,day,0,renderEditList));
 
     const curItems = si!=null ? getOItems(si,pid) : getItems(b,pid);
+    // 開始時刻から時刻を累積計算
+    const stKey2 = si!=null ? `その他|slot${si}|${pid}|start` : `${b}|${pid}|start`;
+    let runMins = timeToMins(day.edits[stKey2] ?? null);
+
     curItems.forEach((it, idx) => {
       if (it.del) return;
       const row = document.createElement('div'); row.className='ci-edit'; row.draggable=true; row.dataset.idx=idx;
+
+      // 終了目安時刻を計算
+      let endTimeStr = '';
+      if (runMins !== null && it.m > 0) { runMins += it.m; endTimeStr = minsToTime(runMins); }
 
       // テキストエリア（項目名）
       const ta = document.createElement('textarea'); ta.rows=1; ta.value=it.l;
       ta.addEventListener('input', () => { curItems[idx]={...curItems[idx],l:ta.value}; if(si!=null)setOItems(si,pid,curItems);else setItems(b,pid,curItems); });
       // 分数入力
       const minInp = document.createElement('input'); minInp.type='number'; minInp.className='min-inp'; minInp.value=it.m||''; minInp.placeholder='分';
-      minInp.addEventListener('input', () => { curItems[idx]={...curItems[idx],m:parseInt(minInp.value)||0}; if(si!=null)setOItems(si,pid,curItems);else setItems(b,pid,curItems); });
+      minInp.addEventListener('input', () => {
+        curItems[idx]={...curItems[idx],m:parseInt(minInp.value)||0};
+        if(si!=null)setOItems(si,pid,curItems);else setItems(b,pid,curItems);
+        renderEditList(); // 時刻を再計算
+      });
       // 削除ボタン
       const delBtn = document.createElement('button'); delBtn.textContent='×'; delBtn.style.cssText='background:transparent;border:none;cursor:pointer;color:#D4537E;font-size:14px;flex-shrink:0;padding:2px 4px';
       delBtn.addEventListener('click', () => { curItems[idx]={...curItems[idx],del:true}; if(si!=null)setOItems(si,pid,curItems);else setItems(b,pid,curItems); save(); renderEditList(); });
       // グリップ
       const grip = document.createElement('span'); grip.className='dh'; grip.textContent='⠿';
+      // 終了目安時刻表示
+      const timeSpan = document.createElement('span');
+      timeSpan.style.cssText='font-size:10px;color:#1D9E75;white-space:nowrap;min-width:36px;text-align:right';
+      timeSpan.textContent = endTimeStr;
 
       const top = document.createElement('div'); top.className='ci-edit-top';
-      top.appendChild(grip); top.appendChild(ta); top.appendChild(minInp); top.appendChild(delBtn);
+      top.appendChild(grip); top.appendChild(ta); top.appendChild(minInp); top.appendChild(timeSpan); top.appendChild(delBtn);
       row.appendChild(top);
 
       // DnD
