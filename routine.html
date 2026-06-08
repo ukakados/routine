@@ -143,6 +143,20 @@ body{font-family:-apple-system,'Hiragino Sans',sans-serif;background:#0f0f0f;col
 .memo-card-title{font-size:13px;font-weight:500;color:#e8e8e8;margin-bottom:10px}
 .memo-card-body{font-size:13px;color:#bbb;line-height:1.6;white-space:pre-wrap}
 .memo-card-close{margin-top:12px;width:100%;padding:8px;border:none;background:#333;color:#e8e8e8;border-radius:8px;font-size:12px;cursor:pointer}
+/* 編集モード */
+.edit-mode-bar{display:flex;align-items:center;gap:6px;margin-bottom:8px;padding:8px 10px;background:#1a1a0a;border:.5px solid #EF9F27;border-radius:10px}
+.edit-mode-label{font-size:11px;color:#EF9F27;flex:1}
+.decide-btn{padding:6px 16px;border-radius:999px;border:none;background:#1D9E75;color:#fff;font-size:12px;font-weight:600;cursor:pointer}
+.decide-btn:hover{background:#178a63}
+.re-edit-btn{padding:4px 12px;border-radius:999px;border:.5px solid #555;background:transparent;color:#888;font-size:11px;cursor:pointer}
+.re-edit-btn:hover{background:#1a1a1a;color:#e8e8e8}
+.decided-badge{font-size:10px;color:#1D9E75;background:#0d2a1f;padding:2px 8px;border-radius:999px;margin-left:4px}
+/* 編集モード時のアイテム行 */
+.ci-edit{display:flex;flex-direction:column;gap:4px;padding:7px 9px;background:#111;border:.5px solid #333;border-radius:8px;margin-bottom:3px}
+.ci-edit-top{display:flex;align-items:center;gap:6px}
+.ci-edit textarea{flex:1;padding:3px 6px;border:.5px solid #333;border-radius:6px;font-size:12px;background:#0d0d0d;color:#e8e8e8;resize:none;min-height:32px;line-height:1.4;font-family:inherit}
+.ci-edit input.min-inp{width:52px;padding:3px 6px;border:.5px solid #333;border-radius:6px;font-size:12px;background:#0d0d0d;color:#e8e8e8;text-align:center}
+.ci-edit .dh{color:#444;font-size:14px;cursor:grab;flex-shrink:0}
 /* 予定画面の時刻表示 */
 .ci-time{font-size:10px;color:#1D9E75;white-space:nowrap;margin-left:2px}
 .ci-has-memo{cursor:pointer}
@@ -414,7 +428,7 @@ function initState() {
 }
 function emptyDay() {
   // デフォルト: 朝→その他(未選択)×2→昼→その他(未選択)×2→夜
-  return {plan:{朝:null,昼:null,夜:null}, otherSlots:[null,null,null,null], sectionOrder:['朝','other:0','other:1','昼','other:2','other:3','夜'], checked:{}, edits:{}};
+  return {plan:{朝:null,昼:null,夜:null}, otherSlots:[null,null,null,null], sectionOrder:['朝','other:0','other:1','昼','other:2','other:3','夜'], checked:{}, edits:{}, decided:{}};
 }
 
 let S;
@@ -436,6 +450,7 @@ try {
     if (!d.otherSlots) d.otherSlots = [];
     if (Array.isArray(d.plan.その他)) { d.otherSlots = d.plan.その他; delete d.plan.その他; }
     if (!d.edits) d.edits = {};
+    if (!d.decided) d.decided = {};
     if (!d.sectionOrder) d.sectionOrder = ['朝','昼','夜', ...d.otherSlots.map((_,i) => 'other:'+i)];
   });
 } catch(e) { S = initState(); }
@@ -461,6 +476,7 @@ const getDay = o => {
   if (!d.plan) d.plan = {朝:null,昼:null,夜:null};
   if (!d.otherSlots) d.otherSlots = [];
   if (!d.edits) d.edits = {};
+  if (!d.decided) d.decided = {};
   if (!d.sectionOrder) d.sectionOrder = ['朝','昼','夜', ...d.otherSlots.map((_,i) => 'other:'+i)];
   return d;
 };
@@ -751,6 +767,34 @@ const confirmIns = () => {
   save(); closeOv('ov-ins'); renderToday();
 };
 
+// ─── 決定済み管理 ───────────────────────────────────────────
+const decidedKey = (sk) => `decided__${sk}`;
+const isDecided  = (day, sk) => !!(day.decided && day.decided[decidedKey(sk)]);
+const setDecided = (day, sk, val) => { if (!day.decided) day.decided={}; day.decided[decidedKey(sk)] = val; };
+
+// 編集モード中のアイテム一時保存（sk→items配列）
+// 編集モード状態管理（sk単位）
+let editingSection = {}; // sk -> true/false
+
+const getEditItems = (sk, day, b, pid, si) => {
+  // 編集用のアイテムを取得（editsキャッシュから）
+  return si!=null ? getOItems(si,pid) : getItems(b,pid);
+};
+
+// 決定処理
+const decideSection = (sk, day, b, pid, si) => {
+  setDecided(day, sk, true);
+  editingSection[sk] = false;
+  save(); renderToday();
+};
+
+// 再編集処理
+const reEditSection = (sk, day) => {
+  setDecided(day, sk, false);
+  editingSection[sk] = true;
+  save(); renderToday();
+};
+
 // ─── 統計計算 ────────────────────────────────────────────
 const calcStats = (items, prefix, checked) => {
   let tot=0, dn=0;
@@ -798,6 +842,113 @@ const deleteItem = (b,pid,idx,si) => {
   delete day.checked[k];
   if (si!=null) setOItems(si,pid,items); else setItems(b,pid,items);
   save(); renderToday();
+};
+
+// 編集モード：項目リストをインライン編集UIで表示
+let editDragIdx2 = null;
+let editDragSk = null;
+
+const buildEditMode = (sk, b, pid, si, day) => {
+  const items = si!=null ? getOItems(si,pid) : getItems(b,pid);
+  const wrap = document.createElement('div');
+
+  // 自由作成の場合：タスク名入力欄
+  const isFreeMode = pid && pid.startsWith('free:');
+  if (isFreeMode) {
+    const nameKey = `free_name__${sk}`;
+    const curName = day.edits[nameKey] || '';
+    const nameInp = document.createElement('input');
+    nameInp.type='text'; nameInp.placeholder='タスク名（例：買い物・資料作成）';
+    nameInp.value=curName;
+    nameInp.style.cssText='width:100%;padding:7px 9px;border:.5px solid #8B7FD4;border-radius:8px;font-size:13px;background:#111;color:#e8e8e8;font-weight:500;margin-bottom:8px;display:block';
+    nameInp.addEventListener('input', () => { day.edits[nameKey]=nameInp.value; save(); });
+    wrap.appendChild(nameInp);
+  }
+
+  // 開始時刻行
+  const stKey = si!=null ? `その他|slot${si}|${pid}|start` : `${b}|${pid}|start`;
+  const stVal = day.edits[stKey] ?? '';
+  const stRow = document.createElement('div');
+  stRow.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:5px 8px;background:#161616;border-radius:8px;border:.5px solid #222';
+  stRow.innerHTML=`<span style="font-size:11px;color:#555">開始時刻</span>
+    <input type="time" value="${stVal}" style="padding:3px 7px;border:.5px solid #333;border-radius:6px;font-size:12px;background:#111;color:#e8e8e8;width:90px"/>`;
+  stRow.querySelector('input').addEventListener('input', e => { day.edits[stKey]=e.target.value; save(); });
+  wrap.appendChild(stRow);
+
+  const renderEditList = () => {
+    const existing = wrap.querySelector('.edit-list');
+    if (existing) existing.remove();
+    const list = document.createElement('div'); list.className='edit-list';
+
+    // 先頭の追加ボタン
+    list.appendChild(makeEditInsBtn(sk,b,pid,si,day,0,renderEditList));
+
+    const curItems = si!=null ? getOItems(si,pid) : getItems(b,pid);
+    curItems.forEach((it, idx) => {
+      if (it.del) return;
+      const row = document.createElement('div'); row.className='ci-edit'; row.draggable=true; row.dataset.idx=idx;
+
+      // テキストエリア（項目名）
+      const ta = document.createElement('textarea'); ta.rows=1; ta.value=it.l;
+      ta.addEventListener('input', () => { curItems[idx]={...curItems[idx],l:ta.value}; if(si!=null)setOItems(si,pid,curItems);else setItems(b,pid,curItems); });
+      // 分数入力
+      const minInp = document.createElement('input'); minInp.type='number'; minInp.className='min-inp'; minInp.value=it.m||''; minInp.placeholder='分';
+      minInp.addEventListener('input', () => { curItems[idx]={...curItems[idx],m:parseInt(minInp.value)||0}; if(si!=null)setOItems(si,pid,curItems);else setItems(b,pid,curItems); });
+      // 削除ボタン
+      const delBtn = document.createElement('button'); delBtn.textContent='×'; delBtn.style.cssText='background:transparent;border:none;cursor:pointer;color:#D4537E;font-size:14px;flex-shrink:0;padding:2px 4px';
+      delBtn.addEventListener('click', () => { curItems[idx]={...curItems[idx],del:true}; if(si!=null)setOItems(si,pid,curItems);else setItems(b,pid,curItems); save(); renderEditList(); });
+      // グリップ
+      const grip = document.createElement('span'); grip.className='dh'; grip.textContent='⠿';
+
+      const top = document.createElement('div'); top.className='ci-edit-top';
+      top.appendChild(grip); top.appendChild(ta); top.appendChild(minInp); top.appendChild(delBtn);
+      row.appendChild(top);
+
+      // DnD
+      row.addEventListener('dragstart', e => { editDragIdx2=idx; editDragSk=sk; row.style.opacity='0.4'; e.dataTransfer.effectAllowed='move'; });
+      row.addEventListener('dragend', () => { row.style.opacity=''; editDragIdx2=null; editDragSk=null; });
+      list.appendChild(row);
+      list.appendChild(makeEditInsBtn(sk,b,pid,si,day,idx+1,renderEditList));
+    });
+    wrap.appendChild(list);
+  };
+
+  renderEditList();
+
+  // 決定ボタン
+  const decBtn = document.createElement('button'); decBtn.className='decide-btn'; decBtn.textContent='✓ 決定';
+  decBtn.addEventListener('click', () => { save(); decideSection(sk, day, b, pid, si); });
+  wrap.appendChild(decBtn);
+  return wrap;
+};
+
+const makeEditInsBtn = (sk, b, pid, si, day, afterIdx, rerender) => {
+  const z = document.createElement('div'); z.className='ins-row pat-ins-row';
+  const btn = document.createElement('button'); btn.className='ins-btn'; btn.textContent='＋ ここに追加';
+  btn.addEventListener('click', () => {
+    const curItems = si!=null ? getOItems(si,pid) : getItems(b,pid);
+    curItems.splice(afterIdx, 0, {l:'', m:0, memo:'', del:false});
+    if(si!=null) setOItems(si,pid,curItems); else setItems(b,pid,curItems);
+    save(); rerender();
+    setTimeout(() => {
+      const rows = document.querySelectorAll('.edit-list .ci-edit');
+      if (rows[afterIdx]) rows[afterIdx].querySelector('textarea').focus();
+    }, 50);
+  });
+  z.appendChild(btn);
+  z.addEventListener('dragover', e => { e.preventDefault(); z.style.background='#0d2a1f'; });
+  z.addEventListener('dragleave', () => { z.style.background=''; });
+  z.addEventListener('drop', e => {
+    e.preventDefault(); z.style.background='';
+    if (editDragIdx2===null || editDragSk!==sk) return;
+    const curItems = si!=null ? getOItems(si,pid) : getItems(b,pid);
+    const moved = curItems.splice(editDragIdx2, 1)[0];
+    const ins = afterIdx > editDragIdx2 ? afterIdx-1 : afterIdx;
+    curItems.splice(ins, 0, moved);
+    if(si!=null) setOItems(si,pid,curItems); else setItems(b,pid,curItems);
+    save(); rerender();
+  });
+  return z;
 };
 
 // メモポップアップ
@@ -867,7 +1018,9 @@ const makeSection = (sk, day, otherPats) => {
   const pats = isO ? otherPats : (S.patterns[band]||[]);
   const {tot,dn,pct} = isO ? otherStats(si,pid||'') : fixedStats(band);
   const mins = isO ? (pid?otherMins(si,pid):0) : fixedMins(band);
-  const pname = pid ? (pats.find(p=>p.id===pid)||{}).name||'' : '';
+  const isFree = pid && pid.startsWith('free:');
+  const freeNameKey = `free_name__${sk}`;
+  const pname = pid ? (isFree ? (day.edits[freeNameKey] || '自由作成') : (pats.find(p=>p.id===pid)||{}).name||'') : '';
   const collapsed = isCol(viewOff, sk);
 
   const sec = document.createElement('div'); sec.className='t-band';
@@ -908,34 +1061,48 @@ const makeSection = (sk, day, otherPats) => {
         clearEdits(day, band, null, si);
         if (isO) day.otherSlots[si]=p.id;
         else day.plan[band]=p.id;
+        setDecided(day, sk, false);
+        editingSection[sk] = true;
         save(); renderToday();
       };
       row.appendChild(btn);
     });
     body.appendChild(row);
   } else if (pid) {
-    const cb=document.createElement('div'); cb.className='chosen-bar';
-    const chg=document.createElement('button'); chg.className='chg-btn'; chg.textContent='↻ 変更';
-    chg.onclick = e => { e.stopPropagation(); openSel(isO?'パターンを変更':`${band}のパターンを選ぶ`, pats, pid, newId => {
-      clearEdits(day, band, pid, si);
-      if (isO) day.otherSlots[si] = newId;
-      else day.plan[band] = newId;
-      save(); renderToday();
-    }); };
-    cb.appendChild(chg); body.appendChild(cb);
+    // パターン変更ボタン（自由作成の場合は非表示）
+    if (!isFree) {
+      const cb=document.createElement('div'); cb.className='chosen-bar';
+      const chg=document.createElement('button'); chg.className='chg-btn'; chg.textContent='↻ パターン変更';
+      chg.onclick = e => { e.stopPropagation(); openSel(isO?'パターンを変更':`${band}のパターンを選ぶ`, pats, pid, newId => {
+        clearEdits(day, band, pid, si);
+        setDecided(day, sk, false);
+        editingSection[sk] = true;
+        if (isO) day.otherSlots[si] = newId;
+        else day.plan[band] = newId;
+        save(); renderToday();
+      }); };
+      cb.appendChild(chg); body.appendChild(cb);
+    }
 
-    // 開始時刻入力（予定画面でも設定可能）
-    const stKey = si!=null ? `その他|slot${si}|${pid}|start` : `${band}|${pid}|start`;
-    const stVal = day.edits[stKey] ?? '';
-    const stRow = document.createElement('div');
-    stRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:5px 8px;background:#161616;border-radius:8px;border:.5px solid #222';
-    stRow.innerHTML = `<span style="font-size:11px;color:#555">開始時刻</span>
-      <input type="time" value="${stVal}" style="padding:3px 7px;border:.5px solid #333;border-radius:6px;font-size:12px;background:#111;color:#e8e8e8;width:90px"
-        oninput="setStartTime('${band}','${pid}',${si??'null'},this.value)"/>
-      <span style="font-size:11px;color:#555">→ 終了目安を表示</span>`;
-    body.appendChild(stRow);
+    const decided = isDecided(day, sk);
+    // 編集中かどうか（未決定、またはeditingSection[sk]がtrue）
+    const inEdit = !decided || editingSection[sk];
 
-    body.appendChild(buildChecklist(band, pid, si, day));
+    if (inEdit) {
+      // 編集モードバー
+      const editBar = document.createElement('div'); editBar.className='edit-mode-bar';
+      editBar.innerHTML=`<span class="edit-mode-label">${isFree?'✎ 自由作成 — タスクを追加してください':'✏ 編集モード — 項目を今日用にカスタマイズしてください'}</span>`;
+      body.appendChild(editBar);
+      body.appendChild(buildEditMode(sk, band, pid, si, day));
+    } else {
+      // 決定済み：チェックリスト表示
+      const decBar = document.createElement('div'); decBar.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:8px';
+      const reEditBtn = document.createElement('button'); reEditBtn.className='re-edit-btn'; reEditBtn.textContent='✏ 再編集';
+      reEditBtn.addEventListener('click', () => reEditSection(sk, day));
+      decBar.appendChild(reEditBtn);
+      body.appendChild(decBar);
+      body.appendChild(buildChecklist(band, pid, si, day));
+    }
   }
   sec.appendChild(body);
   return sec;
@@ -955,6 +1122,23 @@ const renderToday = () => {
     const si=day.otherSlots.length; day.otherSlots.push(pid); day.sectionOrder.push('other:'+si); save(); renderToday();
   });
   wrap.appendChild(addBtn);
+
+  // 自由作成ボタン
+  const freeBtn=document.createElement('button'); freeBtn.className='add-other';
+  freeBtn.innerHTML='✎ <span style="color:#8B7FD4;font-weight:500">タスクを自由作成</span>';
+  freeBtn.onclick = () => {
+    const si=day.otherSlots.length;
+    const freeId = 'free:' + Date.now();
+    day.otherSlots.push(freeId);
+    day.sectionOrder.push('other:'+si);
+    // 空のアイテムリストをeditsに保存
+    const ek = `その他__slot${si}__${freeId}`;
+    day.edits[ek] = [{l:'', m:0, memo:'', del:false}];
+    setDecided(day, 'other:'+si, false);
+    editingSection['other:'+si] = true;
+    save(); renderToday();
+  };
+  wrap.appendChild(freeBtn);
   updateProgress();
 };
 
