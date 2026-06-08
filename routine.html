@@ -989,8 +989,7 @@ const buildEditMode = (sk, b, pid, si, day) => {
   resetBtn2.style.cssText='padding:6px 14px;border-radius:999px;border:.5px solid #555;background:transparent;color:#666;font-size:12px;cursor:pointer';
   resetBtn2.textContent='↩ 最初から選ぶ';
   resetBtn2.addEventListener('click', () => {
-    if (!confirm('パターン選択に戻りますか？
-編集内容はリセットされます。')) return;
+    if (!confirm('パターン選択に戻りますか？編集内容はリセットされます。')) return;
     clearEdits(day, b, pid, si);
     setDecided(day, sk, false);
     editingSection[sk] = false;
@@ -1209,8 +1208,7 @@ const makeSection = (sk, day, otherPats) => {
       resetBtn.style.cssText='padding:4px 12px;border-radius:999px;border:.5px solid #555;background:transparent;color:#666;font-size:11px;cursor:pointer';
       resetBtn.textContent='↩ 最初から選ぶ';
       resetBtn.addEventListener('click', () => {
-        if (!confirm('パターン選択に戻りますか？
-チェック状態・編集内容はリセットされます。')) return;
+        if (!confirm('パターン選択に戻りますか？チェック状態・編集内容はリセットされます。')) return;
         clearEdits(day, band, pid, si);
         setDecided(day, sk, false);
         editingSection[sk] = false;
