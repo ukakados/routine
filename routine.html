@@ -930,7 +930,7 @@ const buildEditMode = (sk, b, pid, si, day) => {
   stRow.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:5px 8px;background:#161616;border-radius:8px;border:.5px solid #222';
   stRow.innerHTML=`<span style="font-size:11px;color:#555">開始時刻</span>
     <input type="time" value="${stVal}" style="padding:3px 7px;border:.5px solid #333;border-radius:6px;font-size:12px;background:#111;color:#e8e8e8;width:90px"/>`;
-  stRow.querySelector('input').addEventListener('input', e => { day.edits[stKey]=e.target.value; save(); });
+  stRow.querySelector('input').addEventListener('input', e => { day.edits[stKey]=e.target.value; save(); renderToday(); });
   wrap.appendChild(stRow);
 
   const renderEditList = () => {
@@ -1194,6 +1194,16 @@ const makeSection = (sk, day, otherPats) => {
       body.appendChild(buildEditMode(sk, band, pid, si, day));
     } else {
       // 決定済み：チェックリスト表示
+      // 開始時刻入力（決定後も編集可能）
+      const stKey2 = si!=null ? `その他|slot${si}|${pid}|start` : `${band}|${pid}|start`;
+      const stVal2 = day.edits[stKey2] ?? '';
+      const stRow2 = document.createElement('div');
+      stRow2.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:5px 8px;background:#161616;border-radius:8px;border:.5px solid #222';
+      stRow2.innerHTML=`<span style="font-size:11px;color:#555">開始時刻</span>
+        <input type="time" value="${stVal2}" style="padding:3px 7px;border:.5px solid #333;border-radius:6px;font-size:12px;background:#111;color:#e8e8e8;width:90px"/>
+        <span style="font-size:11px;color:#555">→ 終了目安</span>`;
+      stRow2.querySelector('input').addEventListener('input', e => { day.edits[stKey2]=e.target.value; save(); renderToday(); });
+      body.appendChild(stRow2);
       const decBar = document.createElement('div'); decBar.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap';
       const reEditBtn = document.createElement('button'); reEditBtn.className='re-edit-btn'; reEditBtn.textContent='✏ 再編集';
       reEditBtn.addEventListener('click', () => reEditSection(sk, day));
