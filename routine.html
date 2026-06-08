@@ -973,7 +973,7 @@ const buildEditMode = (sk, b, pid, si, day) => {
 
   renderEditList();
 
-  // ボタン行（決定＋パターン保存）
+  // ボタン行（決定＋パターン保存＋戻る）
   const btnRow = document.createElement('div'); btnRow.style.cssText='display:flex;gap:8px;margin-top:10px;flex-wrap:wrap';
   const decBtn = document.createElement('button'); decBtn.className='decide-btn'; decBtn.textContent='✓ 決定';
   decBtn.addEventListener('click', () => { save(); decideSection(sk, day, b, pid, si); });
@@ -984,6 +984,21 @@ const buildEditMode = (sk, b, pid, si, day) => {
   savePatBtn.textContent='★ パターンに保存';
   savePatBtn.addEventListener('click', () => openSaveAsPat(sk, b, pid, si, day));
   btnRow.appendChild(savePatBtn);
+  // パターン選択に戻るボタン
+  const resetBtn2 = document.createElement('button');
+  resetBtn2.style.cssText='padding:6px 14px;border-radius:999px;border:.5px solid #555;background:transparent;color:#666;font-size:12px;cursor:pointer';
+  resetBtn2.textContent='↩ 最初から選ぶ';
+  resetBtn2.addEventListener('click', () => {
+    if (!confirm('パターン選択に戻りますか？
+編集内容はリセットされます。')) return;
+    clearEdits(day, b, pid, si);
+    setDecided(day, sk, false);
+    editingSection[sk] = false;
+    if (si!=null) day.otherSlots[si] = null;
+    else day.plan[b] = null;
+    save(); renderToday();
+  });
+  btnRow.appendChild(resetBtn2);
   wrap.appendChild(btnRow);
   return wrap;
 };
@@ -1189,6 +1204,21 @@ const makeSection = (sk, day, otherPats) => {
       savePatBtn2.textContent='★ パターンに保存';
       savePatBtn2.addEventListener('click', () => openSaveAsPat(sk, band, pid, si, day));
       decBar.appendChild(savePatBtn2);
+      // パターン選択に戻るボタン
+      const resetBtn = document.createElement('button');
+      resetBtn.style.cssText='padding:4px 12px;border-radius:999px;border:.5px solid #555;background:transparent;color:#666;font-size:11px;cursor:pointer';
+      resetBtn.textContent='↩ 最初から選ぶ';
+      resetBtn.addEventListener('click', () => {
+        if (!confirm('パターン選択に戻りますか？
+チェック状態・編集内容はリセットされます。')) return;
+        clearEdits(day, band, pid, si);
+        setDecided(day, sk, false);
+        editingSection[sk] = false;
+        if (isO) day.otherSlots[si] = null;
+        else day.plan[band] = null;
+        save(); renderToday();
+      });
+      decBar.appendChild(resetBtn);
       body.appendChild(decBar);
       body.appendChild(buildChecklist(band, pid, si, day));
     }
