@@ -151,6 +151,10 @@ body{font-family:-apple-system,'Hiragino Sans',sans-serif;background:#0f0f0f;col
 .re-edit-btn{padding:4px 12px;border-radius:999px;border:.5px solid #555;background:transparent;color:#888;font-size:11px;cursor:pointer}
 .re-edit-btn:hover{background:#1a1a1a;color:#e8e8e8}
 .decided-badge{font-size:10px;color:#1D9E75;background:#0d2a1f;padding:2px 8px;border-radius:999px;margin-left:4px}
+/* パターン保存モーダル */
+.save-pat-band-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.save-pat-band-btn{padding:5px 12px;border-radius:999px;border:.5px solid #333;font-size:12px;cursor:pointer;background:transparent;color:#888}
+.save-pat-band-btn.on{font-weight:600;border-color:#EF9F27;background:#2a1f08;color:#EF9F27}
 /* 編集モード時のアイテム行 */
 .ci-edit{display:flex;flex-direction:column;gap:4px;padding:7px 9px;background:#111;border:.5px solid #333;border-radius:8px;margin-bottom:3px}
 .ci-edit-top{display:flex;align-items:center;gap:6px}
@@ -767,6 +771,60 @@ const confirmIns = () => {
   save(); closeOv('ov-ins'); renderToday();
 };
 
+// ─── パターンとして保存 ─────────────────────────────────────
+let savePatCtx = null;
+let savePatBand = '朝';
+
+const openSaveAsPat = (sk, band, pid, si, day) => {
+  // 現在の編集済みアイテムを取得
+  const items = si!=null ? getOItems(si,pid) : getItems(band,pid);
+  const validItems = items.filter(i=>!i.del && i.l.trim());
+  if (!validItems.length) { alert('項目が空です。先に項目を追加してください。'); return; }
+
+  savePatCtx = {sk, band, pid, si, day, items: validItems};
+  savePatBand = band === 'その他' ? 'その他' : band; // デフォルトは同じバンド
+
+  // 自由作成の場合はタスク名をデフォルト名に
+  const freeNameKey = `free_name__${sk}`;
+  const defaultName = (pid&&pid.startsWith('free:')&&day.edits[freeNameKey])
+    ? day.edits[freeNameKey]
+    : (band + 'パターン');
+  document.getElementById('sp-name').value = defaultName;
+
+  // バンド選択ボタン
+  const row = document.getElementById('sp-band-row'); row.innerHTML='';
+  ['朝','昼','夜','その他'].forEach(b => {
+    const btn=document.createElement('button'); btn.className='save-pat-band-btn'+(b===savePatBand?' on':'');
+    btn.textContent=b;
+    btn.addEventListener('click', ()=>{
+      savePatBand=b;
+      row.querySelectorAll('.save-pat-band-btn').forEach(el=>el.classList.remove('on'));
+      btn.classList.add('on');
+    });
+    row.appendChild(btn);
+  });
+  document.getElementById('ov-savepat').classList.add('on');
+};
+
+const confirmSaveAsPat = () => {
+  const name = document.getElementById('sp-name').value.trim();
+  if (!name) { alert('パターン名を入力してください'); return; }
+  if (!savePatCtx) return;
+  const {items} = savePatCtx;
+  // パターンとして登録
+  if (!S.patterns[savePatBand]) S.patterns[savePatBand]=[];
+  const newPat = {
+    id: savePatBand + (S.nid++),
+    name,
+    memo: '',
+    items: items.map(i=>({l:i.l, m:i.m, memo:i.memo||''}))
+  };
+  S.patterns[savePatBand].push(newPat);
+  save();
+  closeOv('ov-savepat');
+  alert(`「${name}」を${savePatBand}のパターンに保存しました！`);
+};
+
 // ─── 決定済み管理 ───────────────────────────────────────────
 const decidedKey = (sk) => `decided__${sk}`;
 const isDecided  = (day, sk) => !!(day.decided && day.decided[decidedKey(sk)]);
@@ -915,10 +973,18 @@ const buildEditMode = (sk, b, pid, si, day) => {
 
   renderEditList();
 
-  // 決定ボタン
+  // ボタン行（決定＋パターン保存）
+  const btnRow = document.createElement('div'); btnRow.style.cssText='display:flex;gap:8px;margin-top:10px;flex-wrap:wrap';
   const decBtn = document.createElement('button'); decBtn.className='decide-btn'; decBtn.textContent='✓ 決定';
   decBtn.addEventListener('click', () => { save(); decideSection(sk, day, b, pid, si); });
-  wrap.appendChild(decBtn);
+  btnRow.appendChild(decBtn);
+  // パターンとして保存ボタン
+  const savePatBtn = document.createElement('button');
+  savePatBtn.style.cssText='padding:6px 14px;border-radius:999px;border:.5px solid #EF9F27;background:transparent;color:#EF9F27;font-size:12px;cursor:pointer';
+  savePatBtn.textContent='★ パターンに保存';
+  savePatBtn.addEventListener('click', () => openSaveAsPat(sk, b, pid, si, day));
+  btnRow.appendChild(savePatBtn);
+  wrap.appendChild(btnRow);
   return wrap;
 };
 
@@ -1068,6 +1134,24 @@ const makeSection = (sk, day, otherPats) => {
       row.appendChild(btn);
     });
     body.appendChild(row);
+    // 自由作成ボタン（全バンド共通）
+    const freeRowBtn = document.createElement('button');
+    freeRowBtn.style.cssText='margin-top:6px;padding:5px 12px;border-radius:999px;border:.5px solid #8B7FD4;background:transparent;font-size:12px;color:#8B7FD4;cursor:pointer;width:100%';
+    freeRowBtn.textContent='✎ パターンなしで自由作成';
+    freeRowBtn.addEventListener('click', () => {
+      const freeId = 'free:' + Date.now();
+      if (isO) {
+        day.otherSlots[si] = freeId;
+      } else {
+        day.plan[band] = freeId;
+      }
+      const ek = isO ? `その他__slot${si}__${freeId}` : `${band}__${freeId}`;
+      day.edits[ek] = [{l:'', m:0, memo:'', del:false}];
+      setDecided(day, sk, false);
+      editingSection[sk] = true;
+      save(); renderToday();
+    });
+    body.appendChild(freeRowBtn);
   } else if (pid) {
     // パターン変更ボタン（自由作成の場合は非表示）
     if (!isFree) {
@@ -1096,10 +1180,15 @@ const makeSection = (sk, day, otherPats) => {
       body.appendChild(buildEditMode(sk, band, pid, si, day));
     } else {
       // 決定済み：チェックリスト表示
-      const decBar = document.createElement('div'); decBar.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:8px';
+      const decBar = document.createElement('div'); decBar.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap';
       const reEditBtn = document.createElement('button'); reEditBtn.className='re-edit-btn'; reEditBtn.textContent='✏ 再編集';
       reEditBtn.addEventListener('click', () => reEditSection(sk, day));
       decBar.appendChild(reEditBtn);
+      const savePatBtn2 = document.createElement('button');
+      savePatBtn2.style.cssText='padding:4px 12px;border-radius:999px;border:.5px solid #EF9F27;background:transparent;color:#EF9F27;font-size:11px;cursor:pointer';
+      savePatBtn2.textContent='★ パターンに保存';
+      savePatBtn2.addEventListener('click', () => openSaveAsPat(sk, band, pid, si, day));
+      decBar.appendChild(savePatBtn2);
       body.appendChild(decBar);
       body.appendChild(buildChecklist(band, pid, si, day));
     }
@@ -1330,6 +1419,19 @@ const svWithSync = () => {
 // ─── 初期化 ──────────────────────────────────────────────
 renderBTabs(); renderGrid();
 </script>
+
+<!-- パターン保存モーダル -->
+<div class="ov" id="ov-savepat" onclick="closeOv('ov-savepat')"><div class="od" onclick="event.stopPropagation()">
+  <h3>★ パターンとして保存</h3>
+  <div class="fl"><label>パターン名</label><input id="sp-name" placeholder="例：月曜の朝ルーティン"/></div>
+  <div class="fl"><label>保存先のバンド</label>
+    <div class="save-pat-band-row" id="sp-band-row"></div>
+  </div>
+  <div class="of">
+    <button class="bc" onclick="closeOv('ov-savepat')">キャンセル</button>
+    <button class="bp" onclick="confirmSaveAsPat()">保存</button>
+  </div>
+</div></div>
 
 <!-- ログインモーダル -->
 <div class="ov" id="ov-login"><div class="od" onclick="event.stopPropagation()">
