@@ -13,7 +13,7 @@
 <title>ルーティン管理</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,'Hiragino Sans',sans-serif;background:#0f0f0f;color:#e8e8e8;max-width:420px;margin:0 auto;padding:12px}
+body{font-family:-apple-system,'Hiragino Sans',sans-serif;background:#0f0f0f;color:#e8e8e8;max-width:420px;margin:0 auto;padding:12px;padding-top:max(12px, env(safe-area-inset-top));padding-bottom:max(12px, env(safe-area-inset-bottom))}
 .nav{display:flex;gap:3px;padding:3px;background:#1a1a1a;border-radius:999px;margin-bottom:14px;border:.5px solid #2a2a2a}
 .nb{flex:1;padding:7px 0;border:none;background:transparent;border-radius:999px;font-size:12px;font-weight:500;color:#666;cursor:pointer}
 .nb.on{background:#252525;color:#e8e8e8}
@@ -177,7 +177,7 @@ body{font-family:-apple-system,'Hiragino Sans',sans-serif;background:#0f0f0f;col
 </style>
 </head>
 <body>
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;margin-top:4px">
   <span id="sync-status" style="font-size:11px;color:#666">未ログイン</span>
   <div style="display:flex;gap:6px">
     <button onclick="openLoginModal()" style="padding:4px 10px;border:.5px solid #333;border-radius:999px;background:transparent;font-size:11px;color:#888;cursor:pointer">☁ 同期</button>
